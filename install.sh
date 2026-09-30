@@ -236,6 +236,7 @@ elif [ "$PATH_DECISION" = yes ]; then
 elif [ "$PATH_DECISION" = no ]; then
     log "skipping PATH; add $ZEST_DATA/bin yourself or run tools with 'zest run'"
 elif [ -t 0 ]; then
+    # shellcheck disable=SC2016  # backticks in the prompt are literal
     printf 'Add %s to your PATH so `zest` and installed tools run by name? [Y/n] ' "$ZEST_DATA/bin" >&2
     read -r answer || answer=n
     case "$answer" in

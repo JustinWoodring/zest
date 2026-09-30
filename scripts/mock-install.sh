@@ -85,8 +85,11 @@ printf '%s' "$out" | grep -q "0.1.0-install-fixture" || fail "fresh binary marke
 ok "fresh install builds and installs zest"
 
 rc_profile="$HOMEA/.bashrc"
-[ -f "$rc_profile" ] && grep -q "zest toolchain" "$rc_profile" ||
+if [ -f "$rc_profile" ] && grep -q "zest toolchain" "$rc_profile"; then
+    : # profile wired by --yes
+else
     fail "path --yes writes profile" "no zest toolchain block in $rc_profile"
+fi
 grep -qF "$DATA/bin" "$rc_profile" || fail "path --yes profile path" "bin dir missing"
 ok "install --yes adds the zest bin dir to the shell profile"
 
