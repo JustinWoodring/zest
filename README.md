@@ -35,6 +35,18 @@ one (checksum-verified, no admin rights needed), build zest in ReleaseSafe, and
 drop the binary into your user bin directory. Already installed? Re-running the
 installer simply hands over to `zest self-update`.
 
+That bin directory holds `zest` **and** every tool zest installs, so the
+installer also offers to add it to your `PATH` so installed tools run by bare
+name. It asks before editing your shell profile; for automation answer up
+front with a flag:
+
+```sh
+curl -fsSL https://justinwoodring.github.io/zest/install.sh | sh -s -- --yes   # add to PATH, no prompt
+curl -fsSL https://justinwoodring.github.io/zest/install.sh | sh -s -- --no    # leave PATH alone
+```
+
+On Windows, use `-Yes` or `-NoPath`.
+
 Prefer to skip the build? Grab a static binary for your platform from
 [Releases](https://github.com/JustinWoodring/zest/releases).
 

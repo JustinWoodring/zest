@@ -51,6 +51,8 @@
   .badges img { height: 20px; width: auto; object-fit: contain; }
   .hero p.sponsor { color: var(--muted); font-size: 14.5px; margin: 24px 0 0; }
   .hero p.sponsor a { color: var(--accent2); }
+  .hero p.pathnote { color: var(--muted); font-size: 13px; max-width: 640px; margin: 10px auto 0; line-height: 1.6; }
+  .hero p.pathnote code { background: var(--code); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; font: 12px ui-monospace, Menlo, Consolas, monospace; color: #cfe3d8; }
 
   .installs { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; text-align: left; }
   .install-card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
@@ -140,8 +142,11 @@
       </div>
     </div>
     <p class="sponsor">Enjoying zest? <a href="https://github.com/sponsors/JustinWoodring">Consider sponsoring</a> its development.</p>
+    <p class="pathnote">zest and every tool it installs live in one bin directory, so the
+       installer offers to add it to your <code>PATH</code> and installed tools run by bare name.
+       For automation: <code>sh -s -- --yes</code> (add) or <code>--no</code> (skip);
+       PowerShell takes <code>-Yes</code> / <code>-NoPath</code>.</p>
   </div>
-
   <section id="usage">
     <h2>Three commands and you're shipping</h2>
     <p class="lead">Point zest at a git repo, a host shorthand, or a name from the

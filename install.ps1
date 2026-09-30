@@ -17,6 +17,23 @@
 
 $ErrorActionPreference = 'Stop'
 
+# Non-interactive answers for automation: -Yes / -NoPath. Without either, the
+# installer prompts before editing your PowerShell profile.
+$PathDecision = 'ask'
+foreach ($a in $args) {
+    switch -Regex ($a) {
+        '^(-y|--yes|Yes)$'                 { $PathDecision = 'yes' }
+        '^(-n|--no|--no-path|No|NoPath)$'  { $PathDecision = 'no' }
+        '^(-h|--help|Help|\?)$' {
+            Write-Host 'usage: install.ps1 [-Yes] [-NoPath]'
+            Write-Host '  -Yes      add the zest bin dir to PATH without prompting'
+            Write-Host '  -NoPath   do not touch PATH'
+            Write-Host 'With neither, the installer asks before editing your profile.'
+            exit 0
+        }
+    }
+}
+
 if (-not $env:ZEST_REPO_URL)  { $env:ZEST_REPO_URL  = 'https://github.com/JustinWoodring/zest' }
 if (-not $env:ZEST_REF)       { $env:ZEST_REF       = '' }
 if (-not $env:ZIG_VERSION)    { $env:ZIG_VERSION    = '0.16.0' }
@@ -170,9 +187,34 @@ Move-Item -Force $Tmp $ZestBin
 
 Log "installed $ZestBin ($(& $ZestBin --version 2>$null | Select-Object -First 1))"
 
-$binPathEntry = "$($env:ZEST_DATA)\bin"
-if (($env:PATH -split ';') -notcontains $binPathEntry) {
-    Log 'add zest to your PATH:'
-    Write-Host "  `$env:PATH = `"$binPathEntry;`$env:PATH`"; setx PATH `"$binPathEntry;`$env:PATH`"" -ForegroundColor Cyan
+$binPathEntry = Join-Path $env:ZEST_DATA 'bin'
+$onPath = ($env:PATH -split ';') -contains $binPathEntry
+if ($onPath) {
+    Log "$binPathEntry is already on your PATH; 'zest' and installed tools are callable by name"
+} else {
+    $profile = $PROFILE.CurrentUserAllHosts
+    function Persist-Path {
+        $line = "`$env:PATH = `"$binPathEntry;`$env:PATH`""
+        if ((Test-Path $profile) -and ((Get-Content $profile -Raw) -match [regex]::Escape($binPathEntry))) {
+            Log "$profile already references $binPathEntry"
+        } else {
+            New-Item -ItemType Directory -Force -Path (Split-Path $profile) | Out-Null
+            Add-Content -Path $profile -Value "`n# zest toolchain`n$line"
+            Log "added $binPathEntry to PATH via $profile"
+        }
+        Log 'open a new PowerShell window (or dot-source the profile) to use it now'
+    }
+    if ($PathDecision -eq 'yes') {
+        Persist-Path
+    } elseif ($PathDecision -eq 'no') {
+        Log 'skipping PATH; add the bin dir yourself or run tools with zest run'
+    } else {
+        $answer = Read-Host "Add $binPathEntry to your PATH so 'zest' and installed tools run by name? [Y/n]"
+        if ($answer -match '^(n|no)$') {
+            Log 'skipping PATH; run tools with zest run'
+        } else {
+            Persist-Path
+        }
+    }
 }
 Log 'done; upgrade any time with: zest self-update (or re-run this script)'

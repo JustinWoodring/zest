@@ -12,6 +12,12 @@
 #      pipeline.
 #   3. Atomically install the binary at $ZEST_DATA/bin/zest.
 #
+#   4. Offer to add $ZEST_DATA/bin to PATH so `zest` and every tool it
+#      installs are callable by name. Interactive by default; use --yes /
+#      --no-path to answer up front for automation.
+#
+# Usage: install.sh [-y|--yes] [-n|--no-path]
+#
 # Environment overrides:
 #   ZEST_REPO_URL   git URL to build zest from (default: canonical repo)
 #   ZEST_REF        branch/tag to build (default: default branch)
@@ -178,12 +184,67 @@ mv -f "$tmp" "$ZEST_BIN"
 
 log "installed $ZEST_BIN ($("$ZEST_BIN" --version 2>/dev/null | sed -n 1p))"
 
-case ":$PATH:" in
-    *":$ZEST_DATA/bin:"*) ;;
-    *)
-        log "add zest to your PATH:"
-        # shellcheck disable=SC2016  # literal $PATH is the point
-        printf '  export PATH="%s:$PATH"\n' "$ZEST_DATA/bin" >&2
-        ;;
-esac
+# ---------------------------------------------------------------------------
+# 4. PATH. The bin dir holds zest itself and every tool zest installs, so
+#    adding it once makes `zest`, `mytool`, etc. callable by name.
+#    Prompt interactively; --yes / --no-path answer for automation.
+# ---------------------------------------------------------------------------
+PATH_DECISION=ask
+for arg in "$@"; do
+    case "$arg" in
+        -y|--yes) PATH_DECISION=yes ;;
+        -n|--no|--no-path) PATH_DECISION=no ;;
+        -h|--help)
+            cat <<'USAGE'
+usage: install.sh [-y|--yes] [-n|--no-path]
+  -y, --yes     add the zest bin dir to PATH without prompting
+  -n, --no      do not touch PATH
+With neither flag, the installer asks before editing your shell profile.
+USAGE
+            exit 0
+            ;;
+    esac
+done
+
+on_path() { case ":$PATH:" in *":$1:"*) return 0 ;; esac; return 1; }
+
+shell_rc_for() {
+    # Best-match startup file for the user's shell.
+    case "$(basename "${SHELL:-/bin/sh}")" in
+        zsh) printf '%s\n' "$HOME/.zshrc" ;;
+        bash) printf '%s\n' "$HOME/.bashrc" ;;
+        *) printf '%s\n' "$HOME/.profile" ;;
+    esac
+}
+
+persist_path() {
+    rc="$(shell_rc_for)"
+    line="export PATH=\"$ZEST_DATA/bin:\$PATH\""
+    if grep -qsF "$ZEST_DATA/bin" "$rc" 2>/dev/null; then
+        log "$rc already references $ZEST_DATA/bin"
+    else
+        printf '\n# zest toolchain\n%s\n' "$line" >> "$rc"
+        log "added $ZEST_DATA/bin to PATH via $rc"
+    fi
+    log "restart your shell (or 'source $rc') to use it now"
+}
+
+if on_path "$ZEST_DATA/bin"; then
+    log "$ZEST_DATA/bin is already on your PATH; 'zest' and installed tools are callable by name"
+elif [ "$PATH_DECISION" = yes ]; then
+    persist_path
+elif [ "$PATH_DECISION" = no ]; then
+    log "skipping PATH; add $ZEST_DATA/bin yourself or run tools with 'zest run'"
+elif [ -t 0 ]; then
+    printf 'Add %s to your PATH so `zest` and installed tools run by name? [Y/n] ' "$ZEST_DATA/bin" >&2
+    read -r answer || answer=n
+    case "$answer" in
+        n|N|no|No) log "skipping PATH; run tools with 'zest run'" ;;
+        *) persist_path ;;
+    esac
+else
+    # Non-interactive without a flag (CI, pipes): don't block, just advise.
+    log "$ZEST_DATA/bin is not on your PATH; add it, or re-run with --yes to do it automatically"
+fi
+
 log "done; upgrade any time with: zest self-update (or re-run this script)"

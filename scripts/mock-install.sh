@@ -73,24 +73,37 @@ ERR="$WORK/last.err"
 
 # ---------------------------------------------------------------------------
 # 1. Fresh install from a local repo with a system zig present.
-# ---------------------------------------------------------------------------
-ZEST_DATA="$DATA" ZEST_REPO_URL="file://$V1" sh "$INSTALL" >"$OUT" 2>"$ERR" ||
+#    --yes: after a successful install the bin dir is added to the shell
+#    profile so installed tools are callable by name.
+HOMEA="$WORK/homea"; mkdir -p "$HOMEA"
+HOME="$HOMEA" SHELL=/bin/bash ZEST_DATA="$DATA" ZEST_REPO_URL="file://$V1" \
+    sh "$INSTALL" --yes >"$OUT" 2>"$ERR" ||
     fail "fresh install" "$(cat "$ERR")"
 assert_grep "fresh install log" "installed" "$ERR"
 out=$("$DATA/bin/zest" --version 2>&1)
 printf '%s' "$out" | grep -q "0.1.0-install-fixture" || fail "fresh binary marker" "$out"
 ok "fresh install builds and installs zest"
 
+rc_profile="$HOMEA/.bashrc"
+[ -f "$rc_profile" ] && grep -q "zest toolchain" "$rc_profile" ||
+    fail "path --yes writes profile" "no zest toolchain block in $rc_profile"
+grep -qF "$DATA/bin" "$rc_profile" || fail "path --yes profile path" "bin dir missing"
+ok "install --yes adds the zest bin dir to the shell profile"
+
 # ---------------------------------------------------------------------------
 # 2. Re-run must delegate to `zest self-update`: the script never overwrites
 #    an existing zest; zest replaces itself. The installed binary is a real
 #    zest build so it can actually perform the self-update.
 # ---------------------------------------------------------------------------
+#    --no: the PATH step leaves the profile untouched.
+HOMEB="$WORK/homeb"; mkdir -p "$HOMEB"
 DATA2="$WORK/data2"
 mkdir -p "$DATA2/bin"
 cp "$REPO/zig-out/bin/zest" "$DATA2/bin/zest"
-ZEST_DATA="$DATA2" ZEST_REPO_URL="file://$V1" ZEST_SELF_REPO="file://$V2" \
-    sh "$INSTALL" >"$OUT" 2>"$ERR" || fail "self-update delegation" "$(cat "$ERR")"
+HOME="$HOMEB" SHELL=/bin/bash ZEST_DATA="$DATA2" ZEST_REPO_URL="file://$V1" ZEST_SELF_REPO="file://$V2" \
+    sh "$INSTALL" --no >"$OUT" 2>"$ERR" || fail "self-update delegation" "$(cat "$ERR")"
+[ ! -e "$HOMEB/.bashrc" ] || fail "path --no wrote a profile" "profile should not exist"
+ok "install --no leaves the profile untouched"
 # Note: the delegated zest rewrites the captured files from offset 0 (std.Io
 # positional writes), so install.sh's own pre-exec log lines are not durable
 # here. Delegation is proven by the self-update result and exit code.
@@ -184,5 +197,6 @@ assert_grep "bootstrap used private toolchain" "private to" "$ERR"
 assert_grep "fake zig build failure surfaced" "build failed" "$ERR"
 [ ! -x "$WORK/bootstrap-data/bin/zest" ] || fail "fake build installed" "bin/zest exists"
 ok "zig bootstrap downloads, verifies, and extracts without touching \$PATH"
+
 
 printf 'PASS %s (%d checks)\n' "$(basename "$0")" "$PASS"
