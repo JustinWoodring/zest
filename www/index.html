@@ -47,8 +47,8 @@
   .hero h1 { font-size: 44px; letter-spacing: -1px; margin: 18px 0 8px; }
   .hero h1 .z { color: var(--accent); }
   .hero p.tag { color: var(--muted); font-size: 19px; max-width: 620px; margin: 0 auto 26px; }
-  .badges { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 34px; }
-  .badges img { height: 20px; }
+  .badges { display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; margin-bottom: 34px; }
+  .badges img { height: 20px; width: auto; object-fit: contain; }
   .hero p.sponsor { color: var(--muted); font-size: 14.5px; margin: 24px 0 0; }
   .hero p.sponsor a { color: var(--accent2); }
 
@@ -61,6 +61,17 @@
     overflow-x: auto; white-space: pre; color: #cfe3d8;
   }
   .install-card .alt { color: var(--muted); font-size: 12.5px; margin-top: 10px; }
+
+  .demo { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+  .demo figure { margin: 0; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .demo img { width: 100%; height: auto; display: block; border-radius: 8px; }
+  .demo figcaption { color: var(--muted); font-size: 13.5px; margin-top: 10px; text-align: center; }
+
+  table.checks { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+  table.checks th, table.checks td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.checks th { color: var(--accent); font-size: 12.5px; text-transform: uppercase; letter-spacing: 1px; }
+  table.checks td:first-child { white-space: nowrap; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13.5px; }
+  table.checks td:last-child { color: var(--muted); }
 
   section { padding: 44px 0; }
   section h2 { font-size: 26px; margin-bottom: 18px; letter-spacing: -.5px; }
@@ -113,6 +124,7 @@
       <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT">
       <img src="https://img.shields.io/badge/zig-0.16.0-f7a41d" alt="zig">
       <img src="https://img.shields.io/github/v/release/JustinWoodring/zest" alt="release">
+      <a href="https://github.com/sponsors/JustinWoodring"><img src="https://img.shields.io/github/sponsors/JustinWoodring" alt="sponsor"></a>
     </div>
 
     <div class="installs" id="install">
@@ -140,6 +152,60 @@
 <span class="p">$</span> zest update my-cli-tool
 <span class="c"># or try anything without installing:</span>
 <span class="p">$</span> zest run github.com/user/my-cli-tool --version</pre>
+
+  <section id="demo">
+    <h2>Demo</h2>
+    <div class="demo">
+      <figure>
+        <img src="gifs/install.gif" alt="zest install, list, and run a tool">
+        <figcaption>install, list, and run</figcaption>
+      </figure>
+      <figure>
+        <img src="gifs/inspect.gif" alt="zest inspect a project">
+        <figcaption>inspect a project before installing</figcaption>
+      </figure>
+      <figure>
+        <img src="gifs/update.gif" alt="zest update to the latest tag">
+        <figcaption>update to the latest tag</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="inspect">
+    <h2>Inspect before you install</h2>
+    <p class="lead"><code>zest inspect</code> reads a project and reports whether zest
+       can install it, whether the declared version trails the latest upstream tag, and
+       how the package appears in the registry. It never builds and never writes state.</p>
+<pre class="term"><span class="p">$</span> zest inspect .
+zest inspect  my-cli-tool
+location      .
+version       1.4.2   (upstream v1.5.0, OUT OF DATE: `zest update my-cli-tool`)
+minimum zig   0.16.0
+description   A command-line tool for doing things.
+license       MIT
+author        Ada Lovelace &lt;ada@example.com&gt;
+remote        https://github.com/user/my-cli-tool
+zigistry      indexed  https://github.com/user/my-cli-tool  (43 stars)  (same repo as remote)
+programs      my-cli-tool
+verdict       installable  (zest installs "my-cli-tool")</pre>
+    <h3>What it checks</h3>
+    <table class="checks">
+      <tr><th>Source</th><th>What zest reads</th></tr>
+      <tr><td>build.zig</td><td>Every <code>addExecutable</code> target and its <code>.name</code> (computed names are marked dynamic).</td></tr>
+      <tr><td>build.zig.zon</td><td>Declared name, version, and minimum zig version.</td></tr>
+      <tr><td>README.md</td><td>First prose paragraph, as the description.</td></tr>
+      <tr><td>LICENSE</td><td>Sniffed for MIT, Apache-2.0, GPL, BSD, ISC, MPL, or Unlicense.</td></tr>
+      <tr><td>git</td><td>Last commit author and the <code>origin</code> remote.</td></tr>
+      <tr><td>upstream</td><td>Latest tag via <code>git ls-remote --tags</code>, compared to the declared version.</td></tr>
+      <tr><td>Zigistry</td><td>Registry visibility, matching repo, stars, and collision candidates.</td></tr>
+    </table>
+    <h3 style="margin-top:26px">Verdicts</h3>
+    <p class="lead">The verdict mirrors what <code>zest install</code> will do:
+       <strong>installable</strong> (one program, or one named after the tool),
+       <strong>ambiguous</strong> (several programs, none matching, so zest refuses to guess),
+       <strong>no_binaries</strong>, or <strong>not_zest_project</strong>. The exit code is 0
+       only for <code>installable</code>.</p>
+  </section>
   </section>
 
   <section id="why">

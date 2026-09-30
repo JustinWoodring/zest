@@ -9,6 +9,7 @@
     <img src="https://img.shields.io/badge/zig-0.16.0-f7a41d" alt="zig">
     <a href="https://github.com/JustinWoodring/zest/releases"><img src="https://img.shields.io/github/v/release/JustinWoodring/zest" alt="release"></a>
     <a href="https://github.com/JustinWoodring/zest/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs"></a>
+    <a href="https://github.com/sponsors/JustinWoodring"><img src="https://img.shields.io/github/sponsors/JustinWoodring?label=sponsor&logo=github" alt="sponsor"></a>
   </p>
   <p><a href="https://justinwoodring.github.io/zest">justinwoodring.github.io/zest</a></p>
 </div>
@@ -67,6 +68,26 @@ zest inspect my-cli-tool                        # is my installed tool current?
 zest self-update                                # upgrade zest itself
 ```
 
+## Demo
+
+### Install, list, and run
+
+<p align="center">
+  <img src="assets/gifs/install.gif" width="760" alt="zest install, list, and run a tool">
+</p>
+
+### Inspect a project
+
+<p align="center">
+  <img src="assets/gifs/inspect.gif" width="760" alt="zest inspect reports build, binaries, license, and upstream status">
+</p>
+
+### Update to the latest tag
+
+<p align="center">
+  <img src="assets/gifs/update.gif" width="760" alt="zest update moves a tool to its latest release tag">
+</p>
+
 ## Inspect
 
 `zest inspect` answers "is this installable, and is it current?" before you
@@ -99,6 +120,27 @@ verdict       installable  (zest installs "my-cli-tool")
 The verdict (`installable`, `ambiguous`, `no_binaries`, `not_zest_project`)
 reflects whether `zest install` would accept the project; the exit code is 0
 for `installable` and 1 otherwise.
+
+### What inspect checks
+
+| Source | Meaning |
+| --- | --- |
+| `build.zig` | Scans for every `addExecutable` target and records its `.name` (or marks a computed name as dynamic). |
+| `build.zig.zon` | Reads the declared name, version, and minimum zig version, ignoring comments and enum literals. |
+| `README.md` | First prose paragraph becomes the description. |
+| `LICENSE` | Sniffed for MIT, Apache-2.0, GPL, BSD, ISC, MPL, or Unlicense. |
+| git | Last commit author and the `origin` remote. |
+| upstream | `git ls-remote --tags` on the remote, compared against the declared version to flag `OUT OF DATE`. |
+| Zigistry | Visibility of the tool name, the matching repo, star count, and collision candidates. |
+
+The **verdict** mirrors what `zest install` will do:
+
+- `installable`: exactly one program, or several where one is named after the
+  tool (`mytool` from a repo that also builds `mytool-gen`).
+- `ambiguous`: several programs and none matches the tool name, so zest
+  refuses to guess.
+- `no_binaries`: nothing runnable to link.
+- `not_zest_project`: no `build.zig`.
 
 ## Built-in guarantees
 

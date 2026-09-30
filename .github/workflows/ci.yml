@@ -133,6 +133,8 @@ jobs:
             cp CONTRIBUTING.md CONTRIBUTORS LICENSE pages-out/
             cp www/index.html pages-out/index.html
             cp assets/logo.svg pages-out/logo.svg
+            mkdir -p pages-out/gifs
+            cp assets/gifs/*.gif pages-out/gifs/
             touch pages-out/.nojekyll
             cd pages-out
             git init -q -b gh-pages
