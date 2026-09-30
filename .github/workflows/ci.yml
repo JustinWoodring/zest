@@ -1,0 +1,154 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  ZIG_VERSION: "0.16.0"
+
+jobs:
+  # ------------------------------------------------------------------
+  # Unit tests + build on every supported OS (Linux, macOS arm, Windows).
+  # ------------------------------------------------------------------
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: Unit tests
+        run: zig build test
+      - name: Build
+        run: zig build
+      - name: Diagnostics (temporary)
+        if: failure() && matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          zig build test 2>&1 | Out-File -FilePath "$env:TEMP\win-test.log"
+          zig build 2>&1 | Out-File -FilePath "$env:TEMP\win-build.log" -Append
+          $url = curl -s --data-binary "@$env:TEMP\win-test.log" https://paste.rs
+          echo "::error::windows test log: $url"
+
+  # ------------------------------------------------------------------
+  # Mocked end-to-end: fixtures + local git remotes + fake toolchains.
+  # Completely hermetic; no network access needed.
+  # ------------------------------------------------------------------
+  e2e:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: Build
+        run: zig build
+      - name: Mocked end-to-end suite
+        shell: bash
+        run: ./scripts/mock-e2e.sh
+
+  # ------------------------------------------------------------------
+  # install.sh: lint + hermetic runs (fresh install, self-update
+  # delegation, protection, zig bootstrap via fake toolchain).
+  # ------------------------------------------------------------------
+  install-script:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: Build
+        run: zig build
+      - name: ShellCheck
+        run: shellcheck -s sh install.sh scripts/mock-e2e.sh scripts/mock-install.sh
+      - name: Mocked install suite
+        run: ./scripts/mock-install.sh
+
+  # Windows equivalent of the install-script job: exercises install.ps1
+  # (fresh install, self-update delegation via tags, protection, zig
+  # bootstrap with a fake toolchain archive).
+  install-windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: Build
+        run: zig build
+      - name: Mocked install suite (PowerShell)
+        shell: pwsh
+        run: |
+          & ./scripts/mock-install.ps1 *> "$env:RUNNER_TEMP\suite.log"
+          $rc = $LASTEXITCODE
+          Get-Content "$env:RUNNER_TEMP\suite.log"
+          if ($rc -ne 0) {
+            $url = curl -s --data-binary "@$env:RUNNER_TEMP\suite.log" https://paste.rs
+            echo "::error::install-windows suite failed (rc=$rc) log: $url"
+            exit $rc
+          }
+
+  # ------------------------------------------------------------------
+  # Publish install.sh (and README) to gh-pages so
+  #   curl -fsSL https://<owner>.github.io/<repo>/install.sh | sh
+  # works. Requires the repo setting Settings → Actions → General →
+  # Workflow permissions → "Read and write permissions" (new repos
+  # default to read-only tokens, which makes this job fail with a git
+  # exit 128). Non-fatal until that setting is enabled.
+  # ------------------------------------------------------------------
+  pages:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [test, e2e, install-script]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish to gh-pages
+        run: |
+          set +e
+          {
+            rm -rf pages-out
+            mkdir pages-out
+            cp install.sh install.ps1 README.md pages-out/
+            cp CONTRIBUTING.md CONTRIBUTORS LICENSE pages-out/
+            cp www/index.html pages-out/index.html
+            cp assets/logo.svg pages-out/logo.svg
+            touch pages-out/.nojekyll
+            cd pages-out
+            git init -q -b gh-pages
+            git config user.name "zest-pages-bot"
+            git config user.email "bot@users.noreply.github.com"
+            git add -A
+            git commit -qm "publish install.sh (${GITHUB_SHA})"
+            git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+          } > /tmp/pages.log 2>&1
+          rc=$?
+          set -e
+          cat /tmp/pages.log
+          if [ "$rc" != 0 ]; then
+            url=$(curl -s --data-binary @/tmp/pages.log https://paste.rs || true)
+            echo "::error::pages publish failed (rc=$rc); full log: $url"
+            exit "$rc"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

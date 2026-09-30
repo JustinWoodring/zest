@@ -1,0 +1,70 @@
+name: release
+
+# On a version tag: cross-build release binaries for every supported
+# triple and attach them to the GitHub release.
+#
+#   x86_64-linux-musl  aarch64-linux-musl  x86_64-windows-gnu
+#   aarch64-windows-gnu  aarch64-macos
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  ZIG_VERSION: "0.16.0"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: x86_64-linux-musl, archive: tar.gz }
+          - { os: ubuntu-latest, target: aarch64-linux-musl, archive: tar.gz }
+          - { os: ubuntu-latest, target: x86_64-windows-gnu, archive: zip }
+          - { os: ubuntu-latest, target: aarch64-windows-gnu, archive: zip }
+          - { os: macos-latest, target: aarch64-macos, archive: tar.gz }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+
+      - name: Build (${{ matrix.target }})
+        run: zig build -Dtarget=${{ matrix.target }} -Doptimize=ReleaseSafe
+
+      - name: Package
+        shell: bash
+        run: |
+          set -eu
+          VER="${GITHUB_REF_NAME#v}"
+          TRIPLE="${{ matrix.target }}"
+          STAGE="zest-${VER}-${TRIPLE}"
+          mkdir -p "$STAGE"
+          if [ "${{ matrix.archive }}" = zip ]; then
+            cp zig-out/bin/zest.exe "$STAGE/zest.exe"
+            zip -r "zest-${VER}-${TRIPLE}.zip" "$STAGE"
+          else
+            cp zig-out/bin/zest "$STAGE/zest"
+            chmod 755 "$STAGE/zest"
+            tar -czf "zest-${VER}-${TRIPLE}.tar.gz" "$STAGE"
+          fi
+          ls -la "zest-${VER}-${TRIPLE}.${{ matrix.archive }}"
+
+      - name: Attach to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          VER="${GITHUB_REF_NAME#v}"
+          ASSET="zest-${VER}-${{ matrix.target }}.${{ matrix.archive }}"
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 ||
+              gh release create "$GITHUB_REF_NAME" \
+                  --title "zest $VER" \
+                  --notes "zest $VER, static ReleaseSafe binaries per triple.
+          Install: curl -fsSL https://justinwoodring.github.io/zest/install.sh | sh"
+          gh release upload "$GITHUB_REF_NAME" "$ASSET" --clobber

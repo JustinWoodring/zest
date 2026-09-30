@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>zest: Zig executable staging tool</title>
+<meta name="description" content="Install, run, and upgrade CLI tools built from any git repository. Static binaries, tagged releases, one command.">
+<link rel="icon" type="image/svg+xml" href="logo.svg">
+<style>
+  :root {
+    --bg: #0b1016;
+    --bg-soft: #111823;
+    --card: #131c26;
+    --line: #1f2b38;
+    --text: #e6edf3;
+    --muted: #8b98a5;
+    --accent: #2dd4a7;
+    --accent2: #f7a41d;
+    --code: #0d141c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.65 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+
+  header.site {
+    border-bottom: 1px solid var(--line);
+    background: rgba(11,16,22,.8);
+    backdrop-filter: blur(8px);
+    position: sticky; top: 0; z-index: 10;
+  }
+  header.site .wrap { display: flex; align-items: center; gap: 12px; height: 60px; }
+  header.site img { width: 28px; height: 28px; border-radius: 8px; }
+  header.site .name { font-weight: 700; letter-spacing: .5px; }
+  header.site nav { margin-left: auto; display: flex; gap: 22px; }
+  header.site nav a { color: var(--muted); font-size: 15px; }
+  header.site nav a:hover { color: var(--text); text-decoration: none; }
+
+  .hero { text-align: center; padding: 72px 0 48px; }
+  .hero img { width: 120px; height: 120px; border-radius: 26px; }
+  .hero h1 { font-size: 44px; letter-spacing: -1px; margin: 18px 0 8px; }
+  .hero h1 .z { color: var(--accent); }
+  .hero p.tag { color: var(--muted); font-size: 19px; max-width: 620px; margin: 0 auto 26px; }
+  .badges { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 34px; }
+  .badges img { height: 20px; }
+  .hero p.sponsor { color: var(--muted); font-size: 14.5px; margin: 24px 0 0; }
+  .hero p.sponsor a { color: var(--accent2); }
+
+  .installs { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; text-align: left; }
+  .install-card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+  .install-card h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--accent); margin-bottom: 10px; }
+  .install-card code {
+    display: block; background: var(--code); border: 1px solid var(--line);
+    border-radius: 8px; padding: 12px 14px; font: 13px/1.5 ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+    overflow-x: auto; white-space: pre; color: #cfe3d8;
+  }
+  .install-card .alt { color: var(--muted); font-size: 12.5px; margin-top: 10px; }
+
+  section { padding: 44px 0; }
+  section h2 { font-size: 26px; margin-bottom: 18px; letter-spacing: -.5px; }
+  section p.lead { color: var(--muted); max-width: 700px; margin-bottom: 22px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+  .feature { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+  .feature h3 { font-size: 16px; margin-bottom: 8px; }
+  .feature h3 .dot { color: var(--accent); }
+  .feature p { color: var(--muted); font-size: 14.5px; }
+
+  pre.term {
+    background: var(--code); border: 1px solid var(--line); border-radius: 12px;
+    padding: 20px 22px; font: 13.5px/1.7 ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+    overflow-x: auto; color: #cfe3d8;
+  }
+  pre.term .p { color: var(--accent2); }
+  pre.term .c { color: var(--muted); }
+
+  footer { border-top: 1px solid var(--line); margin-top: 40px; padding: 28px 0 40px; }
+  footer .wrap { display: flex; justify-content: space-between; color: var(--muted); font-size: 14px; flex-wrap: wrap; gap: 10px; }
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="wrap">
+    <img src="logo.svg" alt="zest logo">
+    <span class="name">zest</span>
+    <nav>
+      <a href="#install">Install</a>
+      <a href="#usage">Usage</a>
+      <a href="#why">Why</a>
+      <a href="https://github.com/JustinWoodring/zest/releases">Releases</a>
+      <a href="CONTRIBUTING.md">Contributing</a>
+      <a href="https://github.com/JustinWoodring/zest">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="hero">
+    <img src="logo.svg" alt="zest logo">
+    <h1><span class="z">z</span>est</h1>
+    <p class="tag">Zig executable staging tool: install, run, and upgrade CLI tools
+       built from any git repository, compiled on your machine with the real Zig build pipeline.</p>
+    <div class="badges">
+      <img src="https://github.com/JustinWoodring/zest/actions/workflows/ci.yml/badge.svg" alt="ci">
+      <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT">
+      <img src="https://img.shields.io/badge/zig-0.16.0-f7a41d" alt="zig">
+      <img src="https://img.shields.io/github/v/release/JustinWoodring/zest" alt="release">
+    </div>
+
+    <div class="installs" id="install">
+      <div class="install-card">
+        <h3>Linux &amp; macOS</h3>
+        <code>curl -fsSL https://justinwoodring.github.io/zest/install.sh | sh</code>
+        <p class="alt">Bootstraps a private Zig toolchain if needed. No root required.</p>
+      </div>
+      <div class="install-card">
+        <h3>Windows</h3>
+        <code>irm https://justinwoodring.github.io/zest/install.ps1 | iex</code>
+        <p class="alt">PowerShell 5.1+. Same protection and upgrade model.</p>
+      </div>
+    </div>
+    <p class="sponsor">Enjoying zest? <a href="https://github.com/sponsors/JustinWoodring">Consider sponsoring</a> its development.</p>
+  </div>
+
+  <section id="usage">
+    <h2>Three commands and you're shipping</h2>
+    <p class="lead">Point zest at a git repo, a host shorthand, or a name from the
+       <a href="https://zigistry.dev">Zigistry</a> registry. It clones, builds in ReleaseSafe,
+       and puts the binary on your machine.</p>
+<pre class="term"><span class="p">$</span> zest install github.com/user/my-cli-tool
+<span class="p">$</span> zest run my-cli-tool --help
+<span class="p">$</span> zest update my-cli-tool
+<span class="c"># or try anything without installing:</span>
+<span class="p">$</span> zest run github.com/user/my-cli-tool --version</pre>
+  </section>
+
+  <section id="why">
+    <h2>Why zest</h2>
+    <div class="grid">
+      <div class="feature"><h3><span class="dot">●</span> Any source</h3>
+        <p>Git URLs, host shorthand, or short names resolved through the Zigistry registry. Tags, branches, or commit hashes.</p></div>
+      <div class="feature"><h3><span class="dot">●</span> Tagged releases by default</h3>
+        <p>zest tracks the latest semantic-version tag, never master, and falls back to the default branch only when a repo has no tags.</p></div>
+      <div class="feature"><h3><span class="dot">●</span> Built on your machine</h3>
+        <p>No trust-on-first-use binaries. zest compiles with the real Zig build pipeline in ReleaseSafe and stages the result locally.</p></div>
+      <div class="feature"><h3><span class="dot">●</span> zest protects itself</h3>
+        <p>The name <em>zest</em> is reserved. No package can overwrite, shadow, or remove the zest binary; only <code>zest self-update</code> can.</p></div>
+      <div class="feature"><h3><span class="dot">●</span> Cross-platform</h3>
+        <p>Linux (x86_64, arm64), macOS (arm64), and Windows (x86_64, arm64). Release binaries are attached to every tag.</p></div>
+      <div class="feature"><h3><span class="dot">●</span> Atomic everything</h3>
+        <p>Manifest writes, binary installs, and self-upgrades are atomic, so a failed build never damages an existing installation.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Upgrade anything, including zest</h2>
+    <p class="lead">Every tool updates with one command, and zest upgrades itself the same way,
+       from tagged releases, without ever letting another package touch it.</p>
+<pre class="term"><span class="p">$</span> zest update my-cli-tool
+<span class="p">$</span> zest self-update
+<span class="p">$</span> zest list
+<span class="c"># NAME          VERSION  SOURCE</span>
+<span class="c"># my-cli-tool    v1.4.2   https://github.com/user/my-cli-tool</span></pre>
+  </section>
+
+</div>
+
+<footer>
+  <div class="wrap">
+    <span>zest, MIT licensed. &copy; 2026 Justin Woodring.</span>
+    <span><a href="https://github.com/JustinWoodring/zest">GitHub</a> &middot;
+          <a href="https://github.com/JustinWoodring/zest/releases">Releases</a> &middot;
+          <a href="CONTRIBUTING.md">Contributing</a> &middot;
+          <a href="CONTRIBUTORS">Contributors</a> &middot;
+          <a href="https://github.com/sponsors/JustinWoodring">Sponsor</a> &middot;
+          <a href="https://zigistry.dev">Zigistry</a></span>
+  </div>
+</footer>
+
+</body>
+</html>
