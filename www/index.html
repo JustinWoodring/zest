@@ -94,8 +94,9 @@
   .specs .row .k { flex: none; width: 148px; font: 600 12.5px var(--mono); letter-spacing: .04em; color: var(--accent); }
   .specs .row .d { color: var(--dim); font-size: 14.5px; }
 
-  .sponsor-line { margin-top: 34px; color: var(--faint); font-size: 13.5px; }
-  .sponsor-line a { color: var(--accent-2); }
+  .sponsor-line { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 34px; color: var(--dim); font-size: 13.5px; }
+  .sponsor-cta { display: inline-flex; align-items: center; min-height: 36px; padding: 0 13px; border: 1px solid color-mix(in srgb, var(--accent-2) 55%, var(--line-2)); border-radius: 8px; background: color-mix(in srgb, var(--accent-2) 13%, var(--panel)); color: var(--accent-2); font: 600 12px var(--mono); text-decoration: none; }
+  .sponsor-cta:hover { border-color: var(--accent-2); background: color-mix(in srgb, var(--accent-2) 22%, var(--panel)); color: var(--text); text-decoration: none; }
 
   footer { border-top: 1px solid var(--line); margin-top: 60px; padding: 26px 0 44px; color: var(--faint); font: 13px var(--mono); }
   footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
@@ -147,6 +148,9 @@
     </div>
   </div>
 
+  <p class="lead">I’m building a small ecosystem of focused Zig tools: zest builds and updates
+  CLI tools; zymposium provisions the agent skills those tools and Zig packages provide.
+  Each works on its own; the integration is optional.</p>
   <section id="install">
     <div class="kicker"><span class="num">01</span>Install</div>
     <h2>One command, no root required</h2>
@@ -260,7 +264,9 @@ verdict       installable  (zest installs "my-cli-tool")</pre>
 <span class="p">$</span> zest list
 <span class="c"># NAME          VERSION  SOURCE</span>
 <span class="c"># my-cli-tool    v1.4.2   https://github.com/user/my-cli-tool</span></pre>
-    <p class="sponsor-line">Enjoying zest? <a href="https://github.com/sponsors/JustinWoodring">Consider sponsoring</a> its development.</p>
+    <p class="sponsor-line"><span>Enjoying zest?</span>
+      <a class="sponsor-cta" href="https://github.com/sponsors/JustinWoodring">Consider sponsoring</a>
+      <span>its development.</span></p>
   </section>
 
   <section id="skills">

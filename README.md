@@ -12,6 +12,9 @@
     <a href="https://github.com/sponsors/JustinWoodring"><img src="https://img.shields.io/github/sponsors/JustinWoodring?label=sponsor&logo=github" alt="sponsor"></a>
   </p>
   <p><a href="https://justinwoodring.github.io/zest">justinwoodring.github.io/zest</a></p>
+  <p><em>I’m building a small ecosystem of focused Zig tools: zest builds and updates
+     CLI tools; zymposium provisions the agent skills those tools and Zig packages
+     provide. Each works on its own; the integration is optional.</em></p>
 </div>
 
 ---

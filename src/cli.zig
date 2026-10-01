@@ -81,7 +81,6 @@ pub fn parse(gpa: std.mem.Allocator, args: []const []const u8) ParseError!Comman
         return .{ .update = .{ .name = try gpa.dupe(u8, args[1]) } };
     }
 
-
     if (std.mem.eql(u8, first, "inspect")) {
         // `zest inspect` inspects the current directory; `zest inspect <t>`
         // inspects a package/source named <t>.
@@ -103,6 +102,8 @@ fn eqlAny(s: []const u8, candidates: []const []const u8) bool {
     }
     return false;
 }
+
+pub const version = "0.1.0";
 
 pub const usage_text =
     \\zest: Zig executable staging tool
@@ -130,6 +131,7 @@ pub const usage_text =
     \\State root: $XDG_DATA_HOME/zest (default ~/.local/share/zest)
     \\Self source: $ZEST_SELF_REPO (default https://github.com/JustinWoodring/zest)
     \\
+    \\Author: Justin Woodring
     \\Like zest? Consider sponsoring development: https://github.com/sponsors/JustinWoodring
 ;
 
@@ -144,10 +146,11 @@ pub const logo_text =
 ;
 
 pub const about_text = logo_text ++ "\n" ++
-    " zest 0.1.0, the Zig executable staging tool\n" ++
+    " zest " ++ version ++ ", the Zig executable staging tool\n" ++
     " install, run, and upgrade CLI tools built from any git repository\n\n" ++
     " home     https://github.com/JustinWoodring/zest\n" ++
-    " install  https://justinwoodring.github.io/zest\n\n" ++
+    " install  https://justinwoodring.github.io/zest\n" ++
+    " author   Justin Woodring\n" ++
+    " sponsor  https://github.com/sponsors/JustinWoodring\n\n" ++
     " try `zest --help` for commands\n";
-
-pub const version_text = "zest 0.1.0\n";
+pub const version_text = "zest " ++ version ++ "\n";
