@@ -39,9 +39,9 @@ drop the binary into your user bin directory. Already installed? Re-running the
 installer simply hands over to `zest self-update`.
 
 That bin directory holds `zest` **and** every tool zest installs, so the
-installer also offers to add it to your `PATH` so installed tools run by bare
-name. It asks before editing your shell profile; for automation answer up
-front with a flag:
+installer offers to add it to your `PATH` so installed tools run by bare name.
+The prompt uses your terminal even when the script is piped from `curl | sh`.
+Without an interactive terminal, answer up front for automation:
 
 ```sh
 curl -fsSL https://justinwoodring.github.io/zest/install.sh | sh -s -- --yes   # add to PATH, no prompt
@@ -182,6 +182,10 @@ The **verdict** mirrors what `zest install` will do:
   The only thing allowed to replace zest is `zest self-update`.
 - **Atomic by design.** Manifest writes and binary installs are atomic, and a
   failed build always leaves the previous installation untouched.
+- **Terminal-aware statuses.** Informational and completion markers are colored
+  only on ANSI-capable terminals by default. Nonempty `NO_COLOR` disables color;
+  `CLICOLOR_FORCE` enables it for redirected output too. `TERM=dumb` selects
+  ASCII markers. JSON and child-process output remain unstyled.
 - **Cross-platform.** Linux (x86_64, arm64), macOS (arm64), and Windows
   (x86_64, arm64), with release binaries attached to every tag.
 

@@ -18,6 +18,8 @@ const util = @import("util.zig");
 const inspect = @import("inspect.zig");
 const skills = @import("skills.zig");
 
+const presentation = @import("dragonfruit");
+
 /// The zest tool name itself is reserved: no package may install, replace, or
 /// remove the zest binary. Only `selfUpdate` may write it.
 pub const reserved_name = "zest";
@@ -33,12 +35,15 @@ pub const Ctx = struct {
     err: *Io.Writer,
     paths: paths_mod.Paths,
     environ: *const std.process.Environ.Map,
+    style_out: presentation.Style = .{},
+    style_err: presentation.Style = .{},
+    glyphs: presentation.Glyphs = .{ .unicode = false },
     /// Resolved zig executable (absolute path) or null for $PATH resolution.
     /// Populated by `resolveZig`.
     zig_path: ?[]const u8 = null,
 
     fn note(c: *Ctx, comptime fmt_string: []const u8, args: anytype) !void {
-        try c.err.print("zest: " ++ fmt_string ++ "\n", args);
+        try presentation.status(c.err, c.style_err, c.glyphs, .info, "zest: " ++ fmt_string, args);
         try c.err.flush();
     }
 
@@ -152,7 +157,7 @@ fn ensureSource(c: *Ctx, src: resolve.Source) !Ensured {
     errdefer c.gpa.free(src_dir);
 
     if (Io.Dir.cwd().access(c.io, src_dir, .{})) |_| {
-        try c.note("updating {s} ({s} → {s})…", .{ src.name, src.name, src.refDisplayName() });
+        try c.note("updating {s} ({s} {s} {s})…", .{ src.name, src.name, c.glyphs.arrow(), src.refDisplayName() });
         const res = try git.checkout(c.gpa, c.io, src_dir, src.ref);
         defer c.gpa.free(res.output);
         if (!res.ok) {
@@ -165,7 +170,7 @@ fn ensureSource(c: *Ctx, src: resolve.Source) !Ensured {
         else => |e| return e,
     }
 
-    try c.note("cloning {s} → {s} ({s})…", .{ src.url, src_dir, src.refDisplayName() });
+    try c.note("cloning {s} {s} {s} ({s})…", .{ src.url, c.glyphs.arrow(), src_dir, src.refDisplayName() });
     const res = try git.clone(c.gpa, c.io, src, src_dir);
     if (!res.ok) {
         try c.err.print("zest: git clone failed:\n{s}", .{res.output});
@@ -323,7 +328,7 @@ fn resolveInput(c: *Ctx, input: []const u8) !resolve.Source {
 
     switch (result) {
         .found => |src| {
-            try c.note("resolved '{s}' → {s}", .{ input, src.url });
+            try c.note("resolved '{s}' {s} {s}", .{ input, c.glyphs.arrow(), src.url });
             return src;
         },
         .ambiguous => |candidates| {
@@ -472,7 +477,7 @@ pub fn install(c: *Ctx, input: []const u8, force: bool) !u8 {
     try state.save(c.io, Io.Dir.cwd(), c.paths.state_file);
 
     toolchain.cleanCaches(c.gpa, c.io, src_dir);
-    try c.out.print("installed {s} ({s}) → {s}\n", .{ src.name, label, bin_abs });
+    try presentation.status(c.out, c.style_out, c.glyphs, .success, "installed {s} ({s}) {s} {s}", .{ src.name, label, c.glyphs.arrow(), bin_abs });
     try c.out.flush();
     c.syncSkills(src.name);
     return 0;
@@ -627,7 +632,7 @@ pub fn remove(c: *Ctx, name: []const u8) !u8 {
     _ = state.tools.orderedRemove(name);
     try state.save(c.io, Io.Dir.cwd(), c.paths.state_file);
 
-    try c.out.print("removed {s} ({s})\n", .{ name, existing.source_url });
+    try presentation.status(c.out, c.style_out, c.glyphs, .success, "removed {s} ({s})", .{ name, existing.source_url });
     try c.out.flush();
     // The clone is gone, so this tells zymposium to drop the tool's skills.
     c.syncSkills(name);
@@ -673,7 +678,7 @@ pub fn update(c: *Ctx, name: []const u8) !u8 {
     defer if (tag) |t| c.gpa.free(t);
 
     if (Io.Dir.cwd().access(c.io, src_dir, .{})) |_| {
-        try c.note("updating {s} → {s}…", .{ name, if (tag) |t| t else "default branch" });
+        try c.note("updating {s} {s} {s}…", .{ name, c.glyphs.arrow(), if (tag) |t| t else "default branch" });
         const res = try git.checkout(c.gpa, c.io, src_dir, ref);
         defer c.gpa.free(res.output);
         if (!res.ok) {
@@ -694,7 +699,7 @@ pub fn update(c: *Ctx, name: []const u8) !u8 {
     defer c.gpa.free(commit);
 
     if (std.mem.eql(u8, commit, existing.commit)) {
-        try c.out.print("{s} already up to date ({s})\n", .{ name, commit[0..@min(12, commit.len)] });
+        try presentation.status(c.out, c.style_out, c.glyphs, .success, "{s} already up to date ({s})", .{ name, commit[0..@min(12, commit.len)] });
         try c.out.flush();
         c.syncSkills(name);
         return 0;
@@ -736,7 +741,7 @@ pub fn update(c: *Ctx, name: []const u8) !u8 {
     try state.save(c.io, Io.Dir.cwd(), c.paths.state_file);
 
     toolchain.cleanCaches(c.gpa, c.io, src_dir);
-    try c.out.print("updated {s}: {s} → {s} ({s})\n", .{ name, old_version, label, commit[0..@min(12, commit.len)] });
+    try presentation.status(c.out, c.style_out, c.glyphs, .success, "updated {s}: {s} {s} {s} ({s})", .{ name, old_version, c.glyphs.arrow(), label, commit[0..@min(12, commit.len)] });
     try c.out.flush();
     c.syncSkills(name);
     return 0;
@@ -785,7 +790,7 @@ pub fn selfUpdate(c: *Ctx) !u8 {
     defer c.gpa.free(self_src);
 
     if (Io.Dir.cwd().access(c.io, self_src, .{})) |_| {
-        try c.note("updating zest source ({s} → {s})…", .{ repo, src.refDisplayName() });
+        try c.note("updating zest source ({s} {s} {s})…", .{ repo, c.glyphs.arrow(), src.refDisplayName() });
         const res = try git.checkout(c.gpa, c.io, self_src, ref);
         defer c.gpa.free(res.output);
         if (!res.ok) {
@@ -794,7 +799,7 @@ pub fn selfUpdate(c: *Ctx) !u8 {
         }
     } else |err| switch (err) {
         error.FileNotFound => {
-            try c.note("cloning {s} → {s}…", .{ repo, self_src });
+            try c.note("cloning {s} {s} {s}…", .{ repo, c.glyphs.arrow(), self_src });
             const res = try git.clone(c.gpa, c.io, src, self_src);
             if (!res.ok) {
                 try c.err.print("zest: git clone failed:\n{s}", .{res.output});
@@ -897,7 +902,7 @@ pub fn selfUpdate(c: *Ctx) !u8 {
     // Scoped to `zest` so no other tool's skills are touched, and advisory as
     // always: the binary has already been replaced by this point.
     c.syncSkills(reserved_name);
-    try c.out.print("zest self-updated → {s} ({s})\n", .{ commit[0..@min(12, commit.len)], repo });
+    try presentation.status(c.out, c.style_out, c.glyphs, .success, "zest self-updated {s} {s} ({s})", .{ c.glyphs.arrow(), commit[0..@min(12, commit.len)], repo });
     try c.out.flush();
     return 0;
 }

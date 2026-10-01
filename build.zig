@@ -7,9 +7,12 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const dragonfruit = b.dependency("dragonfruit", .{ .target = target }).module("dragonfruit");
+
     const mod = b.addModule("zest", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
+        .imports = &.{.{ .name = "dragonfruit", .module = dragonfruit }},
     });
 
     const exe = b.addExecutable(.{
@@ -20,6 +23,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .imports = &.{
                 .{ .name = "zest", .module = mod },
+                .{ .name = "dragonfruit", .module = dragonfruit },
             },
         }),
     });

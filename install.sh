@@ -13,8 +13,8 @@
 #   3. Atomically install the binary at $ZEST_DATA/bin/zest.
 #
 #   4. Offer to add $ZEST_DATA/bin to PATH so `zest` and every tool it
-#      installs are callable by name. Interactive by default; use --yes /
-#      --no-path to answer up front for automation.
+#      installs are callable by name. Prompts through /dev/tty even when
+#      piped; use --yes / --no-path for automation.
 #
 # Usage: install.sh [-y|--yes] [-n|--no-path]
 #
@@ -235,16 +235,19 @@ elif [ "$PATH_DECISION" = yes ]; then
     persist_path
 elif [ "$PATH_DECISION" = no ]; then
     log "skipping PATH; add $ZEST_DATA/bin yourself or run tools with 'zest run'"
-elif [ -t 0 ]; then
+elif { exec 3<>/dev/tty; } 2>/dev/null; then
+    # curl | sh consumes stdin, so read the interactive answer from the
+    # controlling terminal instead of silently falling back to advice.
     # shellcheck disable=SC2016  # backticks in the prompt are literal
-    printf 'Add %s to your PATH so `zest` and installed tools run by name? [Y/n] ' "$ZEST_DATA/bin" >&2
-    read -r answer || answer=n
+    printf 'Add %s to your PATH so `zest` and installed tools run by name? [Y/n] ' "$ZEST_DATA/bin" >&3
+    IFS= read -r answer <&3 || answer=n
+    exec 3>&-
     case "$answer" in
         n|N|no|No) log "skipping PATH; run tools with 'zest run'" ;;
         *) persist_path ;;
     esac
 else
-    # Non-interactive without a flag (CI, pipes): don't block, just advise.
+    # Non-interactive without a controlling terminal: don't block, just advise.
     log "$ZEST_DATA/bin is not on your PATH; add it, or re-run with --yes to do it automatically"
 fi
 

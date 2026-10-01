@@ -5,6 +5,7 @@
 const std = @import("std");
 const Io = std.Io;
 const zest = @import("zest");
+const presentation = @import("dragonfruit");
 
 pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;
@@ -39,6 +40,27 @@ pub fn main(init: std.process.Init) !void {
 fn flushBoth(out: *Io.Writer, err_out: *Io.Writer) void {
     out.flush() catch {};
     err_out.flush() catch {};
+}
+
+fn isNonempty(value: ?[]const u8) bool {
+    return if (value) |text| text.len != 0 else false;
+}
+
+fn isDumbTerminal(environ: *const std.process.Environ.Map) bool {
+    const term = environ.get("TERM") orelse return false;
+    return std.mem.eql(u8, term, "dumb");
+}
+
+fn styleFor(file: Io.File, io: Io, environ: *const std.process.Environ.Map) presentation.Style {
+    const is_terminal = (file.isTty(io) catch false) and
+        (file.supportsAnsiEscapeCodes(io) catch false);
+    return presentation.Style.resolve(
+        .auto,
+        is_terminal,
+        isNonempty(environ.get("NO_COLOR")),
+        isNonempty(environ.get("CLICOLOR_FORCE")),
+        isDumbTerminal(environ),
+    );
 }
 
 fn run(
@@ -82,6 +104,9 @@ fn run(
         .err = err_out,
         .paths = try zest.paths.Paths.resolve(gpa, environ),
         .environ = environ,
+        .style_out = styleFor(.stdout(), io, environ),
+        .style_err = styleFor(.stderr(), io, environ),
+        .glyphs = .{ .unicode = !isDumbTerminal(environ) },
     };
     return zest.commands.dispatch(&ctx, cmd);
 }

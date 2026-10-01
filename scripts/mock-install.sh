@@ -93,6 +93,14 @@ fi
 grep -qF "$DATA/bin" "$rc_profile" || fail "path --yes profile path" "bin dir missing"
 ok "install --yes adds the zest bin dir to the shell profile"
 
+# A curl | sh install has piped stdin but still owns a controlling terminal.
+# The default PATH offer must prompt there and persist an affirmative answer.
+PROMPT_HOME="$WORK/prompt-home"; mkdir -p "$PROMPT_HOME"
+PROMPT_DATA="$WORK/prompt-data"
+python3 "$REPO/scripts/mock-install-tty.py" "$INSTALL" "file://$V1" "$PROMPT_HOME" "$PROMPT_DATA" >"$OUT" 2>"$ERR" ||
+    fail "piped installer PATH prompt" "$(cat "$ERR")"
+ok "piped installer offers PATH and persists approval"
+
 # ---------------------------------------------------------------------------
 # 2. Re-run must delegate to `zest self-update`: the script never overwrites
 #    an existing zest; zest replaces itself. The installed binary is a real

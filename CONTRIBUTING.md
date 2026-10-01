@@ -23,8 +23,9 @@ zig build            # build zig-out/bin/zest
 zig build test       # unit tests
 ```
 
-Requirements: Zig 0.16.0 or newer, plus `git`. You do not need a separate
-Zig install for the test suites; the hermetic suites use local fixtures.
+Requirements: Zig 0.16.0 or newer, plus `git`. The first build may fetch the
+pinned `dragonfruit` package if it is not already cached; the test fixtures
+themselves remain hermetic.
 
 ## Development workflow
 
@@ -36,6 +37,9 @@ zig build test            # unit tests
 ./scripts/mock-e2e.sh     # hermetic end-to-end suite (no network)
 ./scripts/mock-install.sh # POSIX installer suite
 ```
+
+The POSIX installer test uses Python 3's standard PTY module to verify that
+`curl | sh` can prompt through the controlling terminal.
 
 `scripts/mock-install.ps1` covers the Windows installer and is exercised by CI
 on `windows-latest`; you only need it if you are changing `install.ps1`.
