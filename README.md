@@ -50,6 +50,12 @@ On Windows, use `-Yes` or `-NoPath`.
 Prefer to skip the build? Grab a static binary for your platform from
 [Releases](https://github.com/JustinWoodring/zest/releases).
 
+Want more out of the tools you already manage? A tool can ship agent skills
+in a `skills/` directory, and [`zymposium`](https://github.com/JustinWoodring/zymposium)
+links them into your agent's directories so `zest update <tool>` refreshes
+binary *and* skills at once. It is entirely optional — see
+[Agent skills](#agent-skills-optional).
+
 ## What is zest?
 
 Distributing a Zig CLI tool usually means "clone the repo, figure out the
@@ -198,6 +204,56 @@ The **verdict** mirrors what `zest install` will do:
 The manifest (`state.json`) tracks every installed tool's source, version,
 commit, and install time. Unknown fields are tolerated; no package can write
 to it except zest itself.
+
+## Agent skills (optional)
+
+zest does not care about skills, and installing it changes nothing about how it
+behaves. But a tool can ship agent skills alongside its binary — a
+`<package-root>/skills/` directory — and keeping those in sync with the agent
+directories your editor actually reads is otherwise manual work.
+
+[`zymposium`](https://github.com/JustinWoodring/zymposium) does that, and it is
+distributed through zest like any other tool:
+
+```sh
+zest install JustinWoodring/zymposium
+```
+
+When zymposium is installed, zest hands it a nudge after every install, update,
+and remove:
+
+```
+zest install my-tool   →  zymposium sync --tool my-tool
+zest update  my-tool   →  zymposium sync --tool my-tool
+zest remove  my-tool   →  zymposium sync --tool my-tool
+```
+
+so `zest update my-tool` refreshes both the binary and the agent's skills in
+one step.
+
+The integration is deliberately one-way and non-blocking:
+
+- zymposium is optional. zest behaves identically whether or not it is present.
+- The hook never fails a zest command. If zymposium is missing, unbuildable, or
+  exits non-zero (for example because another package already claims a skill
+  name), zest says so on stderr and still reports the install or update as
+  successful. Skills are an add-on to managing binaries, never a precondition.
+- zymposium reads zest's install manifest; zest never writes anything into
+  zymposium's state. The only thing zest reads back is zymposium's own
+  `state.json`, and only to report it: `zest inspect` shows whether a tool ships
+  `skills/`, whether zymposium is installed and runnable, and how many skills
+  it has provisioned.
+
+When a sync does happen, zest says so on stderr:
+
+```
+zest: agent skills for my-tool synced via zymposium
+```
+
+zest finds zymposium in its own `bin` directory. Set `ZYMPOSIUM_BIN` if you
+keep it elsewhere. See the
+[zymposium README](https://github.com/JustinWoodring/zymposium#readme) for the
+skill format, the agents it supports, and the safety rules it follows.
 
 ## FAQ
 

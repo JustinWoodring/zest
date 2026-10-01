@@ -13,6 +13,7 @@ pub const cli = @import("cli.zig");
 pub const commands = @import("commands.zig");
 pub const git = @import("git.zig");
 pub const inspect = @import("inspect.zig");
+pub const skills = @import("skills.zig");
 pub const paths = @import("paths.zig");
 pub const resolve = @import("resolve.zig");
 pub const state = @import("state.zig");

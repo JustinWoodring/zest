@@ -57,6 +57,24 @@ zest follows the conventions of the Zig standard library and the Zig project:
   and turned into a specific exit code. Do not let internal Zig errors escape
   as `internal error:` unless they are genuinely bugs.
 
+## Agent skills integration (optional)
+
+`src/skills.zig` is the one place zest knows about
+[zymposium](https://github.com/JustinWoodring/zymposium). It is deliberately
+small and deliberately optional: when zymposium is absent, `syncSkills` returns
+immediately and nothing changes.
+
+Two rules govern any change here:
+
+- The hook must never fail a zest command. `install`, `update`, and `remove`
+  report success on their own terms; a zymposium failure is a note on stderr and
+  nothing more. Tests cover the missing-binary case.
+- The hook is scoped to one tool (`zymposium sync --tool <name>`), so it must
+  never be widened into a full sync that could disturb other tools' skills.
+
+Anything that changes what zest does without zymposium installed does not
+belong in this module.
+
 ## Tests
 
 Every behavior change needs a test. Tests live next to the code they cover as

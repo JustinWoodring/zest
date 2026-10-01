@@ -88,6 +88,19 @@ fileurl() {
     fi
 }
 
+# skill <skills-dir> <name> <description>
+skill() {
+    mkdir -p "$1/$2"
+    cat >"$1/$2/SKILL.md" <<EOF
+---
+name: $2
+description: $3
+---
+
+Fixture skill for mock-e2e.
+EOF
+}
+
 # fixture <dir> <exe-name> <marker-line>
 fixture() {
     d=$1; name=$2; marker=$3
@@ -128,6 +141,10 @@ fixture "$F/tool-fixture" tool-fixture "fixture-v1"
 fixture "$F/selfsrc" zest "zest-fixture-self"    # self-update source (binary named zest)
 fixture "$F/imposter" zest "IMPOSTER"            # binary named zest, tool name imposter
 fixture "$F/collide" collide-fixture "collide-v1"
+# inspect's optional-skills report needs a package whose skills/ directory is
+# real even when zymposium itself is absent.
+skill "$F/tool-fixture/skills" tool-fixture-usage "How to use tool-fixture"
+(cd "$F/tool-fixture" && git add -A && git -c user.email=t@t -c user.name=t commit -qm "ship a skill")
 
 # multi_fixture <dir> <exe1> <exe2>: a project shipping two executables,
 # written the realistic way: two explicit addExecutable calls with literal
@@ -362,6 +379,141 @@ ok "ephemeral run leaves state untouched"
 out=$("$ZEST" list)
 printf '%s' "$out" | grep -q "no tools installed" || fail "empty list" "$out"
 ok "list empty at end"
+
+# ---------------------------------------------------------------------------
+# Optional agent-skills integration (zymposium).
+#
+# Two properties matter and they pull in opposite directions:
+#
+#   without zymposium   zest must be completely silent about skills, because
+#                       most users will never install it
+#   with zymposium      zest must say so plainly, invoke it scoped to the tool
+#                       being touched, and never let a failure fail the command
+#
+# A compiled stub stands in for zymposium so the suite stays hermetic and
+# portable: `zig build-exe` yields the same executable on every OS, and the
+# stub records its argv so the arguments can be asserted exactly.
+# ---------------------------------------------------------------------------
+STUB_SRC="$REPO/scripts/fixtures/zym-stub.zig"
+[ -f "$STUB_SRC" ] || { echo "mock-e2e: missing stub $STUB_SRC" >&2; exit 1; }
+STUB="$WORK/zym-stub$EXE"
+ZYM_STUB_LOG="$WORK/zym-stub.log"
+export ZYM_STUB_LOG
+export ZYMPOSIUM_BIN="$STUB"
+( cd "$WORK" && zig build-exe "$STUB_SRC" -femit-bin="$STUB" ) >"$LOG" 2>&1 ||
+    fail "build zymposium stub" "$(cat "$LOG")"
+[ -x "$STUB" ] || fail "zymposium stub is executable" "$STUB missing"
+ok "zymposium stub built"
+
+# Register the stub in the install manifest, the way `zest install
+# JustinWoodring/zymposium` would. Presence in the manifest is exactly how
+# zest decides whether to run the hook at all.
+# The rewrite lives in a helper file rather than a heredoc: a heredoc inside a
+# shell function body is not portable to every POSIX shell.
+REGISTER="$WORK/register-zymposium.py"
+cat >"$REGISTER" <<'PYEOF'
+import json, sys
+path, stub = sys.argv[1], sys.argv[2]
+state = json.load(open(path))
+state.setdefault("tools", {})["zymposium"] = {
+    "source_url": "https://github.com/JustinWoodring/zymposium",
+    "version": "v0.1.0",
+    "commit": "0" * 40,
+    "installed_binary": stub,
+    "installed_at": "2026-09-30T00:00:00Z",
+}
+json.dump(state, open(path, "w"), indent=2)
+PYEOF
+register_stub() {
+    python3 "$REGISTER" "$XDG_DATA_HOME/zest/state.json" "$STUB" ||
+        fail "register zymposium" "cannot rewrite state.json"
+}
+
+# -- without zymposium -----------------------------------------------------
+# Nothing mentions zymposium, so nothing about skills may appear at all.
+rm -f "$ZYM_STUB_LOG"
+out=$("$ZEST" install "$(fileurl "$F/tool-fixture")" 2>&1) ||
+    fail "install without zymposium" "$out"
+case "$out" in
+    *skills*|*Skills*|*zymposium*)
+        fail "silent without zymposium" "output mentioned skills: $out" ;;
+    *) ok "install says nothing about skills when zymposium is absent" ;;
+esac
+[ ! -f "$ZYM_STUB_LOG" ] ||
+    fail "hook not run without zymposium" "stub was invoked"
+ok "hook is not run when zymposium is not installed"
+
+out=$("$ZEST" update tool-fixture 2>&1) || fail "update without zymposium" "$out"
+case "$out" in
+    *skills*|*Skills*|*zymposium*) fail "silent on update" "$out" ;;
+    *) ok "update says nothing about skills when zymposium is absent" ;;
+esac
+
+out=$("$ZEST" inspect "$F/tool-fixture" 2>&1) || fail "inspect without zymposium" "$out"
+printf '%s' "$out" >"$LOG"
+assert_grep "inspect says zymposium is absent" "zymposium not installed" "$LOG"
+assert_grep "inspect still reports the tool ships skills" "ships skills/" "$LOG"
+ok "inspect reports the skills picture with zymposium absent"
+
+# -- with zymposium --------------------------------------------------------
+register_stub
+assert_grep "manifest lists zymposium" '"zymposium"' "$XDG_DATA_HOME/zest/state.json"
+
+# `zest self-update` is the separate path for refreshing zest itself. It also
+# nudges zymposium to re-link zest's own skill, but only if zymposium is
+# installed. Use a copy so the harness's executable is never replaced.
+SELF_TEST_BIN="$WORK/self-zest/bin/zest$EXE"
+mkdir -p "$WORK/self-zest/bin"
+cp "$ZEST" "$SELF_TEST_BIN"
+rm -f "$ZYM_STUB_LOG"
+out=$(ZEST_SELF_REPO="$(fileurl "$F/selfsrc")" "$SELF_TEST_BIN" self-update 2>&1) ||
+    fail "self-update with zymposium" "$out"
+printf '%s' "$out" >"$LOG"
+assert_grep "self-update reports the zest skill sync" "zest: agent skills for zest synced via zymposium" "$LOG"
+assert_grep "self-update targets only zest" "sync --tool zest" "$ZYM_STUB_LOG"
+ok "self-update re-syncs zest's skill when zymposium is installed"
+
+rm -f "$ZYM_STUB_LOG"
+out=$("$ZEST" install "$(fileurl "$F/collide")" 2>&1) ||
+    fail "install with zymposium" "$out"
+printf '%s' "$out" >"$LOG"
+assert_grep "install reports the skills sync" "zest: agent skills for collide synced via zymposium" "$LOG"
+[ -f "$ZYM_STUB_LOG" ] || fail "hook invoked with zymposium" "stub was never invoked"
+assert_grep "hook is scoped to the tool" "sync --tool collide" "$ZYM_STUB_LOG"
+ok "install delegates to zymposium, scoped to the tool, and says so"
+
+rm -f "$ZYM_STUB_LOG"
+out=$("$ZEST" update collide 2>&1) || fail "update with zymposium" "$out"
+printf '%s' "$out" >"$LOG"
+assert_grep "update reports the skills sync" "zest: agent skills for collide synced via zymposium" "$LOG"
+assert_grep "update hook is scoped to the tool" "sync --tool collide" "$ZYM_STUB_LOG"
+
+rm -f "$ZYM_STUB_LOG"
+out=$("$ZEST" remove collide 2>&1) || fail "remove with zymposium" "$out"
+printf '%s' "$out" >"$LOG"
+assert_grep "remove reports the skills sync" "zest: agent skills for collide synced via zymposium" "$LOG"
+assert_grep "remove hook is scoped to the tool" "sync --tool collide" "$ZYM_STUB_LOG"
+ok "update and remove delegate the same way"
+
+# -- a failing zymposium must not fail zest -------------------------------
+rm -f "$ZYM_STUB_LOG"
+out=$(ZYM_STUB_EXIT=1 "$ZEST" install "$(fileurl "$F/collide")" 2>&1) ||
+    fail "install survives a failing zymposium" "$out"
+printf '%s' "$out" >"$LOG"
+case "$out" in
+    *"synced via zymposium"*)
+        fail "no synced claim on failure" "$out" ;;
+    *) ok "a failing zymposium is not reported as a success" ;;
+esac
+assert_grep "failing zymposium is reported" "zymposium sync --tool collide" "$LOG"
+ok "a zymposium failure is surfaced without failing the install"
+
+# inspect now reports a provisioned manifest.
+out=$("$ZEST" inspect "$F/tool-fixture" 2>&1) || fail "inspect with zymposium" "$out"
+printf '%s' "$out" >"$LOG"
+assert_grep "inspect names zymposium" "zymposium" "$LOG"
+assert_grep "inspect reports the skills section" "tool skills" "$LOG"
+ok "inspect reports the skills picture with zymposium installed"
 
 printf 'PASS mock-e2e.sh (%d checks)\n' "$PASS" >&4
 cat "$TRANSCRIPT" >&4

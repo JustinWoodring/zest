@@ -16,6 +16,7 @@ const git = @import("git.zig");
 const toolchain = @import("toolchain.zig");
 const util = @import("util.zig");
 const inspect = @import("inspect.zig");
+const skills = @import("skills.zig");
 
 /// The zest tool name itself is reserved: no package may install, replace, or
 /// remove the zest binary. Only `selfUpdate` may write it.
@@ -39,6 +40,47 @@ pub const Ctx = struct {
     fn note(c: *Ctx, comptime fmt_string: []const u8, args: anytype) !void {
         try c.err.print("zest: " ++ fmt_string ++ "\n", args);
         try c.err.flush();
+    }
+
+    /// Re-sync the agent skills of `tool` when zymposium is installed, and
+    /// say so on stderr. Never fails the calling command: skills are an
+    /// add-on to zest, not a precondition for managing binaries. Silent when
+    /// zymposium is not installed.
+    fn syncSkills(c: *Ctx, tool: []const u8) void {
+        var st = loadState(c) catch return;
+        defer st.deinit();
+        if (!skills.isInstalled(&st.tools)) return;
+
+        const outcome = skills.syncTool(
+            c.gpa,
+            c.io,
+            c.paths.bin,
+            c.environ,
+            true,
+            tool,
+            c.out,
+            c.err,
+        ) catch return;
+        skills.reportOutcome(c.err, outcome, tool) catch {};
+
+        // On zymposium's first install (and every update) the same hook also
+        // provisions zest's own skill from <zest root>/self/src. This is a
+        // second provider, so it gets its own scoped sync; all other tool
+        // installs remain strictly scoped to that tool.
+        if (std.mem.eql(u8, tool, skills.zymposium_name)) {
+            const zest_outcome = skills.syncTool(
+                c.gpa,
+                c.io,
+                c.paths.bin,
+                c.environ,
+                true,
+                "zest",
+                c.out,
+                c.err,
+            ) catch return;
+            skills.reportOutcome(c.err, zest_outcome, "zest") catch {};
+        }
+        c.err.flush() catch {};
     }
 };
 
@@ -432,6 +474,7 @@ pub fn install(c: *Ctx, input: []const u8, force: bool) !u8 {
     toolchain.cleanCaches(c.gpa, c.io, src_dir);
     try c.out.print("installed {s} ({s}) → {s}\n", .{ src.name, label, bin_abs });
     try c.out.flush();
+    c.syncSkills(src.name);
     return 0;
 }
 
@@ -586,6 +629,8 @@ pub fn remove(c: *Ctx, name: []const u8) !u8 {
 
     try c.out.print("removed {s} ({s})\n", .{ name, existing.source_url });
     try c.out.flush();
+    // The clone is gone, so this tells zymposium to drop the tool's skills.
+    c.syncSkills(name);
     return 0;
 }
 
@@ -651,6 +696,7 @@ pub fn update(c: *Ctx, name: []const u8) !u8 {
     if (std.mem.eql(u8, commit, existing.commit)) {
         try c.out.print("{s} already up to date ({s})\n", .{ name, commit[0..@min(12, commit.len)] });
         try c.out.flush();
+        c.syncSkills(name);
         return 0;
     }
 
@@ -692,6 +738,7 @@ pub fn update(c: *Ctx, name: []const u8) !u8 {
     toolchain.cleanCaches(c.gpa, c.io, src_dir);
     try c.out.print("updated {s}: {s} → {s} ({s})\n", .{ name, old_version, label, commit[0..@min(12, commit.len)] });
     try c.out.flush();
+    c.syncSkills(name);
     return 0;
 }
 
@@ -846,6 +893,10 @@ pub fn selfUpdate(c: *Ctx) !u8 {
     };
 
     toolchain.cleanCaches(c.gpa, c.io, self_src);
+    // A self-upgrade can change the skills zest ships, so re-provision them.
+    // Scoped to `zest` so no other tool's skills are touched, and advisory as
+    // always: the binary has already been replaced by this point.
+    c.syncSkills(reserved_name);
     try c.out.print("zest self-updated → {s} ({s})\n", .{ commit[0..@min(12, commit.len)], repo });
     try c.out.flush();
     return 0;
@@ -889,6 +940,23 @@ pub fn inspectCmd(c: *Ctx, target: ?[]const u8) !u8 {
         report = try inspect.analyzeLocal(c.gpa, c.io, ".", null);
     }
     defer report.deinit();
+
+    // Optional agent skills: local state only, no network.
+    {
+        var st = try loadState(c);
+        defer st.deinit();
+        const survey = skills.survey(.{
+            .gpa = c.gpa,
+            .io = c.io,
+            .root = c.paths.root,
+            .bin = c.paths.bin,
+            .src = c.paths.src,
+            .location = report.probe_dir orelse report.location,
+            .environ = c.environ,
+            .tools = &st.tools,
+        }) catch skills.Survey{};
+        try inspect.attachSkills(&report, survey);
+    }
 
     try inspect.enrich(c.gpa, c.io, &report, report.check_registry);
     try inspect.printReport(c.out, &report);
@@ -948,6 +1016,9 @@ fn inspectRemote(c: *Ctx, target: []const u8, temp_clone: *?[]u8) !inspect.Repor
     }
 
     var report = try inspect.analyzeLocal(c.gpa, c.io, location, src.name);
+    // `location` is shown to the user as the source, so remember the directory
+    // actually read: local lookups (skills/) need a real path.
+    report.probe_dir = try c.gpa.dupe(u8, location);
     // Show the user-facing source, not the internal temp path, when cloned.
     if (!have_staged) {
         c.gpa.free(report.location);

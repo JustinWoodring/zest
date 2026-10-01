@@ -13,6 +13,7 @@ const util = @import("util.zig");
 const git = @import("git.zig");
 const resolve = @import("resolve.zig");
 
+const skills = @import("skills.zig");
 pub const Severity = enum { err, warn, info };
 
 pub const Issue = struct {
@@ -85,6 +86,13 @@ pub const Report = struct {
     /// Installed version >= upstream tag.
     installed_is_current: ?bool,
 
+    /// Directory actually read, when it differs from `location` (a remote
+    /// source is displayed as its URL). Skills lookups use this.
+    probe_dir: ?[]u8 = null,
+
+    /// Optional agent-skills state; see `attachSkills`.
+    skills: skills.Survey = .{},
+
     pub fn deinit(self: *Report) void {
         const gpa = self.gpa;
         gpa.free(self.location);
@@ -105,6 +113,8 @@ pub const Report = struct {
         for (self.issues) |issue| gpa.free(issue.text);
         gpa.free(self.issues);
         if (self.installed_version) |v| gpa.free(v);
+        if (self.probe_dir) |v| gpa.free(v);
+        self.skills.deinit(gpa);
     }
 };
 
@@ -118,6 +128,33 @@ fn addIssue(
     args: anytype,
 ) !void {
     try issues.append(gpa, .{ .severity = severity, .text = try std.fmt.allocPrint(gpa, fmt, args) });
+}
+
+/// Attach the optional agent-skills section to a report. A zymposium that
+/// zest has registered but whose binary is gone is a real problem, so it
+/// joins the report's issues as a warning.
+pub fn attachSkills(report: *Report, s: skills.Survey) !void {
+    const gpa = report.gpa;
+    if (s.zymposium_installed and !s.zymposium_binary) {
+        var issues: std.ArrayList(Issue) = .empty;
+        errdefer {
+            // The existing issues only moved in; the last one is ours.
+            if (issues.items.len > 0) gpa.free(issues.items[issues.items.len - 1].text);
+            issues.deinit(gpa);
+        }
+        try issues.appendSlice(gpa, report.issues);
+        try addIssue(
+            gpa,
+            &issues,
+            .warn,
+            "zymposium is registered but its binary is missing ({s}); agent skills will not sync",
+            .{s.zymposium_path orelse "?"},
+        );
+        gpa.free(report.issues);
+        report.issues = try issues.toOwnedSlice(gpa);
+    }
+    report.skills.deinit(gpa);
+    report.skills = s;
 }
 
 // ---------------------------------------------------------------------------
@@ -656,6 +693,16 @@ fn row(w: *Io.Writer, label: []const u8, value: []const u8) !void {
     try w.print("{s: <14}{s}\n", .{ label, value });
 }
 
+/// "(state v1)" when the zymposium manifest declares a version.
+fn stateVersion(w: *Io.Writer, provision: skills.Provision) !void {
+    if (provision.version) |v| try w.print(" (state v{d})", .{v});
+}
+
+/// "" for exactly one, "s" otherwise.
+fn plural(n: usize) []const u8 {
+    return if (n == 1) "" else "s";
+}
+
 pub fn printReport(w: *Io.Writer, r: *const Report) !void {
     try w.print("zest inspect  {s}\n", .{r.name});
     if (r.verdict != .installable) {
@@ -706,7 +753,7 @@ pub fn printReport(w: *Io.Writer, r: *const Report) !void {
             try w.print("\n", .{});
         },
         .ambiguous => {
-            try w.print("{s: <14}name is AMBIGUOUS on the registry:\n", .{ "zigistry" });
+            try w.print("{s: <14}name is AMBIGUOUS on the registry:\n", .{"zigistry"});
             for (r.reg_candidates) |cand| {
                 try w.print("                 {s}", .{cand.url});
                 if (cand.stars >= 0) try w.print("  ({d} stars)", .{cand.stars});
@@ -742,6 +789,40 @@ pub fn printReport(w: *Io.Writer, r: *const Report) !void {
             }
         }
         try w.print("\n", .{});
+    }
+
+    // Agent skills (optional): what zymposium is doing with tool skills.
+    {
+        const sk = &r.skills;
+        if (sk.zymposium_installed) {
+            if (!sk.zymposium_binary) {
+                try w.print("{s: <14}zymposium registered, but its binary is missing   (nothing provisioned)\n", .{"skills"});
+            } else {
+                try w.print("{s: <14}zymposium", .{"skills"});
+                try stateVersion(w, sk.provision);
+                if (sk.provision.total == 0) {
+                    try w.writeAll("   no skills provisioned yet\n");
+                } else {
+                    try w.print("   {d} skill{s} provisioned\n", .{ sk.provision.total, plural(sk.provision.total) });
+                }
+            }
+        } else if (sk.provision.total > 0) {
+            try w.print("{s: <14}zymposium is not managed by zest; {d} skill{s} provisioned by another install\n", .{ "skills", sk.provision.total, plural(sk.provision.total) });
+        } else {
+            try row(w, "skills", "(zymposium not installed; no agent skills provisioned)");
+        }
+        for (sk.tools) |t| {
+            try w.print("{s: <14}{s}", .{ "tool skills", t.name });
+            if (t.provided == 0) {
+                try w.writeAll("   ships skills/, not synced yet");
+            } else {
+                try w.print("   {d} skill{s} provisioned", .{ t.provided, plural(t.provided) });
+            }
+            try w.print("\n", .{});
+        }
+        if (sk.self_ships_skills) {
+            try row(w, "this package", "ships skills/   (zymposium provisions it on install)");
+        }
     }
 
     // Issues.
@@ -838,4 +919,149 @@ test "readDescription trims to a paragraph" {
     const d = (try readDescription(gpa, "# Title\n\nDoes a thing.   Really.\n\nSecond para.")).?;
     defer gpa.free(d);
     try std.testing.expectEqualStrings("Does a thing. Really.", d);
+}
+
+/// A minimal installable report, so the printing tests exercise the real
+/// layout instead of a hand-rolled approximation of it.
+fn installableReport(gpa: std.mem.Allocator, s: skills.Survey) !Report {
+    return .{
+        .gpa = gpa,
+        .location = try gpa.dupe(u8, "."),
+        .name = try gpa.dupe(u8, "my-cli-tool"),
+        .has_build_zig = true,
+        .has_zon = true,
+        .zon_name = null,
+        .declared_version = try gpa.dupe(u8, "1.4.2"),
+        .minimum_zig = null,
+        .description = null,
+        .license = try gpa.dupe(u8, "MIT"),
+        .author = null,
+        .remote_url = null,
+        .upstream_tag = null,
+        .out_of_date = null,
+        .binaries = &.{},
+        .selected = null,
+        .reg_status = .not_indexed,
+        .reg_url = null,
+        .reg_stars = -1,
+        .reg_description = null,
+        .reg_matches_remote = null,
+        .reg_candidates = &.{},
+        .issues = &.{},
+        .verdict = .installable,
+        .installed_version = null,
+        .installed_is_current = null,
+        .probe_dir = null,
+        .skills = s,
+    };
+}
+
+fn render(r: *const Report, buffer: []u8) ![]const u8 {
+    var w = Io.Writer.fixed(buffer);
+    try printReport(&w, r);
+    return w.buffered();
+}
+
+test "printReport says plainly that no zymposium provisions skills" {
+    const gpa = std.testing.allocator;
+    var r = try installableReport(gpa, .{});
+    defer r.deinit();
+
+    var buffer: [2048]u8 = undefined;
+    const out = try render(&r, &buffer);
+    try std.testing.expect(std.mem.indexOf(u8, out, "skills        (zymposium not installed; no agent skills provisioned)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out, "this package") == null);
+    try std.testing.expectEqual(@as(usize, 0), r.issues.len);
+}
+
+test "printReport lists what zymposium has provisioned and what this package ships" {
+    const gpa = std.testing.allocator;
+    const survey: skills.Survey = blk: {
+        var s: skills.Survey = .{ .zymposium_installed = true, .zymposium_binary = true };
+        errdefer s.deinit(gpa);
+        const providers = try gpa.alloc(skills.Provider, 2);
+        @memset(providers, .{ .name = &.{}, .count = 0 });
+        s.provision = .{ .read = true, .version = 1, .total = 3, .providers = providers };
+        s.provision.providers[0] = .{ .name = try gpa.dupe(u8, "my-cli-tool"), .count = 2 };
+        s.provision.providers[1] = .{ .name = try gpa.dupe(u8, "some-lib"), .count = 1 };
+        const tools = try gpa.alloc(skills.ToolSkills, 1);
+        @memset(tools, .{ .name = &.{}, .ships_skills = false, .provided = 0 });
+        s.tools = tools;
+        s.tools[0] = .{
+            .name = try gpa.dupe(u8, "my-cli-tool"),
+            .ships_skills = true,
+            .provided = 2,
+        };
+        s.self_ships_skills = true;
+        break :blk s;
+    };
+    var r = try installableReport(gpa, survey);
+    defer r.deinit();
+
+    var buffer: [2048]u8 = undefined;
+    const out = try render(&r, &buffer);
+    try std.testing.expect(std.mem.indexOf(u8, out, "skills        zymposium (state v1)   3 skills provisioned") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out, "tool skills   my-cli-tool   2 skills provisioned") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out, "this package  ships skills/") != null);
+}
+
+test "printReport counts a single skill in the singular" {
+    const gpa = std.testing.allocator;
+    const survey: skills.Survey = blk: {
+        var s: skills.Survey = .{ .zymposium_installed = true, .zymposium_binary = true };
+        errdefer s.deinit(gpa);
+        const tools = try gpa.alloc(skills.ToolSkills, 1);
+        @memset(tools, .{ .name = &.{}, .ships_skills = true, .provided = 1 });
+        s.tools = tools;
+        s.tools[0].name = try gpa.dupe(u8, "my-cli-tool");
+        s.provision = .{ .read = true, .version = 1, .total = 1 };
+        break :blk s;
+    };
+    var r = try installableReport(gpa, survey);
+    defer r.deinit();
+
+    var buffer: [2048]u8 = undefined;
+    const out = try render(&r, &buffer);
+    try std.testing.expect(std.mem.indexOf(u8, out, "skills        zymposium (state v1)   1 skill provisioned") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out, "1 skills provisioned") == null);
+    try std.testing.expect(std.mem.indexOf(u8, out, "tool skills   my-cli-tool   1 skill provisioned") != null);
+}
+
+test "attachSkills warns when zymposium is registered but its binary is gone" {
+    const gpa = std.testing.allocator;
+    var r = try installableReport(gpa, .{});
+    defer r.deinit();
+
+    const exe = try gpa.dupe(u8, "/data/zest/bin/zymposium");
+    try attachSkills(&r, .{
+        .zymposium_installed = true,
+        .zymposium_binary = false,
+        .zymposium_path = exe,
+    });
+
+    var buffer: [2048]u8 = undefined;
+    const out = try render(&r, &buffer);
+    try std.testing.expect(std.mem.indexOf(u8, out, "skills        zymposium registered, but its binary is missing") != null);
+    try std.testing.expectEqual(@as(usize, 1), r.issues.len);
+    try std.testing.expectEqual(Severity.warn, r.issues[0].severity);
+    try std.testing.expect(std.mem.indexOf(u8, r.issues[0].text, "/data/zest/bin/zymposium") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out, "issues        WARN:") != null);
+}
+
+test "attachSkills leaves a working zymposium unflagged" {
+    const gpa = std.testing.allocator;
+    var r = try installableReport(gpa, .{});
+    defer r.deinit();
+
+    const exe = try gpa.dupe(u8, "/data/zest/bin/zymposium");
+    try attachSkills(&r, .{
+        .zymposium_installed = true,
+        .zymposium_binary = true,
+        .zymposium_path = exe,
+    });
+    try std.testing.expectEqual(@as(usize, 0), r.issues.len);
+
+    var buffer: [2048]u8 = undefined;
+    const out = try render(&r, &buffer);
+    try std.testing.expect(std.mem.indexOf(u8, out, "skills        zymposium   no skills provisioned yet") != null);
 }

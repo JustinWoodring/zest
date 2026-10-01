@@ -17,6 +17,9 @@
         "build.zig",
         "build.zig.zon",
         "src",
+        // The agent skill describing zest itself. zymposium links it when it
+        // can find zest's source tree; without it the skill is simply absent.
+        "skills",
         "LICENSE",
         "README.md",
     },

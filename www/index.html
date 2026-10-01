@@ -120,6 +120,7 @@
       <a href="#install">Install</a>
       <a href="#demo">Demo</a>
       <a href="#inspect">Inspect</a>
+      <a href="#skills">Skills</a>
       <a href="https://github.com/JustinWoodring/zest">GitHub</a>
     </nav>
   </div>
@@ -262,6 +263,27 @@ verdict       installable  (zest installs "my-cli-tool")</pre>
     <p class="sponsor-line">Enjoying zest? <a href="https://github.com/sponsors/JustinWoodring">Consider sponsoring</a> its development.</p>
   </section>
 
+  <section id="skills">
+    <div class="kicker"><span class="num">07</span>Agent skills</div>
+    <h2>Supercharge your tools with skills</h2>
+    <p class="lead">A tool can ship a <code>skills/</code> directory: the workflows, references, and
+    hard-won gotchas an agent needs to drive it properly. <a
+    href="https://github.com/JustinWoodring/zymposium">zymposium</a> links those skills into the
+    agent directories your editor actually reads, and &mdash; because the link points into the
+    clone zest already manages &mdash; one <code>zest update</code> refreshes the binary and the
+    skills together.</p>
+<pre class="term"><span class="p">$</span> zest install JustinWoodring/zymposium
+installed zymposium (v0.1.0) → ~/.local/share/zest/bin/zymposium
+<span class="p">$</span> zest update my-cli-tool
+updated my-cli-tool: v1.4.1 → v1.4.2 (9f2c1ab3d0e4)
+zest: agent skills for my-cli-tool synced via zymposium
+<span class="c"># the binary and its agent skills, from one command</span></pre>
+    <p class="notes">Optional, non-blocking, and honest about it: with no zymposium installed zest
+    says nothing at all, and a zymposium that is missing, unbuildable, or unhappy about a skill
+    name is reported and never fails a zest command. <code>zest inspect</code> tells you whether a
+    tool ships <code>skills/</code> and what zymposium has already provisioned.</p>
+  </section>
+
 </div>
 
 <footer>
@@ -271,6 +293,7 @@ verdict       installable  (zest installs "my-cli-tool")</pre>
           <a href="https://github.com/JustinWoodring/zest/releases">Releases</a> &middot;
           <a href="CONTRIBUTING.md">Contributing</a> &middot;
           <a href="CONTRIBUTORS">Contributors</a> &middot;
+          <a href="https://github.com/JustinWoodring/zymposium">zymposium</a> &middot;
           <a href="https://zigistry.dev">Zigistry</a></span>
   </div>
 </footer>
