@@ -132,7 +132,7 @@ cp "$CALLER/build.zig" "$WORK/caller-build.zig"
 cp "$CALLER/build.zig.zon" "$WORK/caller-build.zig.zon"
 (
     cd "$CALLER"
-    HOME="$CALLER_HOME" SHELL=/bin/bash XDG_DATA_HOME=. ZEST_DATA= ZEST_REPO_URL="file://$V1" \
+    HOME="$CALLER_HOME" SHELL=/bin/bash XDG_DATA_HOME=. ZEST_DATA='' ZEST_REPO_URL="file://$V1" \
         sh -s -- --no < "$INSTALL" >"$OUT" 2>"$ERR"
 ) || fail "install from Zig project" "$(cat "$ERR")"
 CALLER_DATA="$CALLER_HOME/.local/share/zest"
