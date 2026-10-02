@@ -142,6 +142,15 @@ cmp "$CALLER/build.zig.zon" "$WORK/caller-build.zig.zon" || fail "caller package
 [ ! -e "$CALLER/zig-pkg" ] || fail "caller dependency cache untouched" "zig-pkg was created"
 [ ! -e "$CALLER/.zig-cache" ] || fail "caller build cache untouched" ".zig-cache was created"
 ok "piped install from a Zig project isolates its build and data paths"
+NONTTY_HOME="$WORK/no-tty-home"; mkdir -p "$NONTTY_HOME"
+NONTTY_DATA="$WORK/no-tty-data"
+HOME="$NONTTY_HOME" SHELL=/bin/bash ZEST_DATA="$NONTTY_DATA" ZEST_REPO_URL="file://$V1" \
+    sh -s < "$INSTALL" >"$OUT" 2>"$ERR" || fail "noninteractive install" "$(cat "$ERR")"
+assert_grep "noninteractive PATH advice" "not on your PATH" "$ERR"
+assert_grep "noninteractive install completes" "done; upgrade any time" "$ERR"
+[ -x "$NONTTY_DATA/bin/zest" ] || fail "noninteractive binary install" "zest missing"
+[ ! -e "$NONTTY_HOME/.bashrc" ] || fail "noninteractive install wrote profile" "profile should remain untouched"
+ok "noninteractive install without a TTY completes without prompting"
 
 
 # ---------------------------------------------------------------------------

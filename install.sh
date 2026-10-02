@@ -260,23 +260,25 @@ persist_path() {
     log "restart your shell (or 'source $rc') to use it now"
 }
 
+ask_path() {
+    if [ "$INSTALL_COLOR" -eq 1 ]; then
+        # shellcheck disable=SC2016  # backticks in the prompt are literal
+        printf '\033[36mAdd %s to your PATH so `zest` and installed tools run by name? [Y/n]\033[0m ' "$ZEST_DATA/bin" >/dev/tty || return 1
+    else
+        # shellcheck disable=SC2016  # backticks in the prompt are literal
+        printf 'Add %s to your PATH so `zest` and installed tools run by name? [Y/n] ' "$ZEST_DATA/bin" >/dev/tty || return 1
+    fi
+    IFS= read -r answer </dev/tty || return 1
+    printf '%s' "$answer"
+}
+
 if on_path "$ZEST_DATA/bin"; then
     log "$ZEST_DATA/bin is already on your PATH; 'zest' and installed tools are callable by name"
 elif [ "$PATH_DECISION" = yes ]; then
     persist_path
 elif [ "$PATH_DECISION" = no ]; then
     log "skipping PATH; add $ZEST_DATA/bin yourself or run tools with 'zest run'"
-elif { exec 3<>/dev/tty; } 2>/dev/null; then
-    # curl | sh consumes stdin, so read the interactive answer from the
-    # controlling terminal instead of silently falling back to advice.
-    # shellcheck disable=SC2016  # backticks in the prompt are literal
-    if [ "$INSTALL_COLOR" -eq 1 ]; then
-        printf '\033[36mAdd %s to your PATH so `zest` and installed tools run by name? [Y/n]\033[0m ' "$ZEST_DATA/bin" >&3
-    else
-        printf 'Add %s to your PATH so `zest` and installed tools run by name? [Y/n] ' "$ZEST_DATA/bin" >&3
-    fi
-    IFS= read -r answer <&3 || answer=n
-    exec 3>&-
+elif answer="$(ask_path 2>/dev/null)"; then
     case "$answer" in
         n|N|no|No) log "skipping PATH; run tools with 'zest run'" ;;
         *) persist_path ;;
