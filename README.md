@@ -43,6 +43,11 @@ installer offers to add it to your `PATH` so installed tools run by bare name.
 The prompt uses your terminal even when the script is piped from `curl | sh`.
 Without an interactive terminal, answer up front for automation:
 
+Installer progress is cyan and errors are red on terminal output. It stays
+plain when redirected, with `NO_COLOR`, or under `TERM=dumb`.
+Relative `XDG_DATA_HOME` values are ignored, keeping installation data out of
+the caller's project tree.
+
 ```sh
 curl -fsSL https://justinwoodring.github.io/zest/install.sh | sh -s -- --yes   # add to PATH, no prompt
 curl -fsSL https://justinwoodring.github.io/zest/install.sh | sh -s -- --no    # leave PATH alone

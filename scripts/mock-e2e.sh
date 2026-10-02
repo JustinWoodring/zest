@@ -189,7 +189,7 @@ cp -r "$F/imposter" "$F/zest"                    # tool NAMED zest (reserved)
 # CLI basics
 # ---------------------------------------------------------------------------
 out=$("$ZEST" --version)
-printf '%s' "$out" | grep -q "zest 0.1.0" || fail "--version" "$out"
+printf '%s' "$out" | grep -q "zest 0.1.1" || fail "--version" "$out"
 ok "--version"
 
 assert_exit 2 "usage error exits 2" "$ZEST" frobnicate
@@ -325,7 +325,7 @@ ok "inspect rejects a non-zest project"
 mkdir -p "$XDG_DATA_HOME/zest/bin"
 cp "$ZEST" "$XDG_DATA_HOME/zest/bin/zest$EXE"
 out=$("$XDG_DATA_HOME/zest/bin/zest$EXE" --version)
-printf '%s' "$out" | grep -q "zest 0.1.0" || fail "pre self-update setup" "$out"
+printf '%s' "$out" | grep -q "zest 0.1.1" || fail "pre self-update setup" "$out"
 ZEST_SELF_REPO="$(fileurl "$F/selfsrc")" "$XDG_DATA_HOME/zest/bin/zest$EXE" self-update >"$LOG" 2>&1 ||
     fail "self-update" "$(cat "$LOG")"
 assert_grep "self-update output" "zest self-updated" "$LOG"
@@ -341,7 +341,7 @@ done
 printf '%s' "$out" | grep -q "zest-fixture-self" ||
     fail "binary replaced by self-update" "$out"
 out=$("$ZEST" --version)
-printf '%s' "$out" | grep -q "zest 0.1.0" || fail "repo binary clobbered" "$out"
+printf '%s' "$out" | grep -q "zest 0.1.1" || fail "repo binary clobbered" "$out"
 ok "self-update atomically replaces zest; nothing else touched"
 
 # ---------------------------------------------------------------------------

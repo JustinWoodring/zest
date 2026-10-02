@@ -97,9 +97,52 @@ ok "install --yes adds the zest bin dir to the shell profile"
 # The default PATH offer must prompt there and persist an affirmative answer.
 PROMPT_HOME="$WORK/prompt-home"; mkdir -p "$PROMPT_HOME"
 PROMPT_DATA="$WORK/prompt-data"
-python3 "$REPO/scripts/mock-install-tty.py" "$INSTALL" "file://$V1" "$PROMPT_HOME" "$PROMPT_DATA" >"$OUT" 2>"$ERR" ||
+python3 "$REPO/scripts/mock-install-tty.py" "$INSTALL" "file://$V1" "$PROMPT_HOME" "$PROMPT_DATA" color >"$OUT" 2>"$ERR" ||
     fail "piped installer PATH prompt" "$(cat "$ERR")"
 ok "piped installer offers PATH and persists approval"
+NO_COLOR_HOME="$WORK/no-color-home"; mkdir -p "$NO_COLOR_HOME"
+NO_COLOR_DATA="$WORK/no-color-data"
+python3 "$REPO/scripts/mock-install-tty.py" "$INSTALL" "file://$V1" "$NO_COLOR_HOME" "$NO_COLOR_DATA" plain >"$OUT" 2>"$ERR" ||
+    fail "installer NO_COLOR handling" "$(cat "$ERR")"
+ok "installer honors NO_COLOR on an interactive terminal"
+
+# A caller's Zig project must not become the install's build/data root.
+CALLER="$WORK/caller-zig-project"
+CALLER_HOME="$WORK/caller-home"
+mkdir -p "$CALLER" "$CALLER_HOME"
+cat >"$CALLER/build.zig" <<'EOF'
+const std = @import("std");
+pub fn build(b: *std.Build) void {
+    _ = b.dependency("vaxis", .{});
+}
+EOF
+cat >"$CALLER/build.zig.zon" <<'EOF'
+.{
+    .name = .ziptail,
+    .version = "0.1.0",
+    .fingerprint = 0x5e2e85076f0d3ab7,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .vaxis = .{ .path = "../missing-vaxis" },
+    },
+    .paths = .{ "build.zig", "build.zig.zon" },
+}
+EOF
+cp "$CALLER/build.zig" "$WORK/caller-build.zig"
+cp "$CALLER/build.zig.zon" "$WORK/caller-build.zig.zon"
+(
+    cd "$CALLER"
+    HOME="$CALLER_HOME" SHELL=/bin/bash XDG_DATA_HOME=. ZEST_DATA= ZEST_REPO_URL="file://$V1" \
+        sh -s -- --no < "$INSTALL" >"$OUT" 2>"$ERR"
+) || fail "install from Zig project" "$(cat "$ERR")"
+CALLER_DATA="$CALLER_HOME/.local/share/zest"
+[ -x "$CALLER_DATA/bin/zest" ] || fail "project-local data path" "zest missing from $CALLER_DATA"
+cmp "$CALLER/build.zig" "$WORK/caller-build.zig" || fail "caller build file unchanged" "build.zig changed"
+cmp "$CALLER/build.zig.zon" "$WORK/caller-build.zig.zon" || fail "caller package unchanged" "build.zig.zon changed"
+[ ! -e "$CALLER/zig-pkg" ] || fail "caller dependency cache untouched" "zig-pkg was created"
+[ ! -e "$CALLER/.zig-cache" ] || fail "caller build cache untouched" ".zig-cache was created"
+ok "piped install from a Zig project isolates its build and data paths"
+
 
 # ---------------------------------------------------------------------------
 # 2. Re-run must delegate to `zest self-update`: the script never overwrites

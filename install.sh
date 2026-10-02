@@ -31,16 +31,47 @@ ZEST_REPO_URL="${ZEST_REPO_URL:-https://github.com/JustinWoodring/zest}"
 ZEST_REF="${ZEST_REF:-}"
 ZIG_VERSION="${ZIG_VERSION:-0.16.0}"
 ZIG_INDEX_URL="${ZIG_INDEX_URL:-https://ziglang.org/download/index.json}"
-ZEST_DATA="${ZEST_DATA:-${XDG_DATA_HOME:-$HOME/.local/share}/zest}"
-# zest derives its layout from XDG_DATA_HOME; keep its view of the data root
-# consistent with ZEST_DATA for everything this script invokes (including the
-# delegated `zest self-update`).
+
+# XDG_DATA_HOME must be absolute. A relative project-local value should not
+# turn a bootstrap run into a write/build inside the caller's Zig project.
+data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+case "$data_home" in
+    /*) ;;
+    *) data_home="$HOME/.local/share" ;;
+esac
+ZEST_DATA="${ZEST_DATA:-$data_home/zest}"
+case "$ZEST_DATA" in
+    /*) ;;
+    *) ZEST_DATA="$(pwd)/$ZEST_DATA" ;;
+esac
+
+# Derive child tools' XDG state from the resolved install path.
+# The source build also runs from its cloned build root.
+# shellcheck disable=SC2034  # XDG_DATA_HOME is consumed by zest and child tools
 XDG_DATA_HOME="$(dirname "$ZEST_DATA")"
 export XDG_DATA_HOME
 ZEST_BIN="$ZEST_DATA/bin/zest"
 
-log() { printf 'zest-install: %s\n' "$*" >&2; }
-die() { printf 'zest-install: error: %s\n' "$*" >&2; exit 1; }
+INSTALL_COLOR=0
+if [ -t 2 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != dumb ]; then
+    INSTALL_COLOR=1
+fi
+
+log() {
+    if [ "$INSTALL_COLOR" -eq 1 ]; then
+        printf '\033[36mzest-install:\033[0m %s\n' "$*" >&2
+    else
+        printf 'zest-install: %s\n' "$*" >&2
+    fi
+}
+die() {
+    if [ "$INSTALL_COLOR" -eq 1 ]; then
+        printf '\033[31mzest-install: error: %s\033[0m\n' "$*" >&2
+    else
+        printf 'zest-install: error: %s\n' "$*" >&2
+    fi
+    exit 1
+}
 need() { command -v "$1" >/dev/null 2>&1 || die "missing dependency: $1"; }
 
 fetch() { # fetch <url> <outfile>
@@ -239,7 +270,11 @@ elif { exec 3<>/dev/tty; } 2>/dev/null; then
     # curl | sh consumes stdin, so read the interactive answer from the
     # controlling terminal instead of silently falling back to advice.
     # shellcheck disable=SC2016  # backticks in the prompt are literal
-    printf 'Add %s to your PATH so `zest` and installed tools run by name? [Y/n] ' "$ZEST_DATA/bin" >&3
+    if [ "$INSTALL_COLOR" -eq 1 ]; then
+        printf '\033[36mAdd %s to your PATH so `zest` and installed tools run by name? [Y/n]\033[0m ' "$ZEST_DATA/bin" >&3
+    else
+        printf 'Add %s to your PATH so `zest` and installed tools run by name? [Y/n] ' "$ZEST_DATA/bin" >&3
+    fi
     IFS= read -r answer <&3 || answer=n
     exec 3>&-
     case "$answer" in

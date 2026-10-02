@@ -13,7 +13,7 @@ from pathlib import Path
 
 
 def main() -> None:
-    install, source_url, home, data = sys.argv[1:]
+    install, source_url, home, data, color_mode = sys.argv[1:]
     env = os.environ.copy()
     env.update({
         "HOME": home,
@@ -21,6 +21,8 @@ def main() -> None:
         "ZEST_DATA": data,
         "ZEST_REPO_URL": source_url,
         "ZEST_REF": "",
+        "NO_COLOR": "1" if color_mode == "plain" else "",
+        "TERM": "xterm-256color",
     })
 
     master, slave = pty.openpty()
@@ -90,6 +92,11 @@ def main() -> None:
     text = output.decode(errors="replace")
     if status != 0:
         raise RuntimeError(f"installer exited {status}:\n{text}")
+    color_marker = b"\x1b[36mzest-install:\x1b[0m"
+    if color_mode == "color" and color_marker not in output:
+        raise RuntimeError(f"interactive installer status was not colored:\n{text}")
+    if color_mode == "plain" and b"\x1b[" in output:
+        raise RuntimeError(f"NO_COLOR did not suppress ANSI escapes:\n{text}")
     if b"Add " not in output or b"to your PATH" not in output:
         raise RuntimeError(f"installer did not offer the PATH update:\n{text}")
     profile = Path(home) / ".bashrc"
