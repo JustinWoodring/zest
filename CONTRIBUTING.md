@@ -23,7 +23,7 @@ zig build            # build zig-out/bin/zest
 zig build test       # unit tests
 ```
 
-Requirements: Zig 0.16.0 or newer, plus `git`. The first build may fetch the
+Requirements: Zig 0.17.0 or newer, plus `git`. The first build may fetch the
 pinned `dragonfruit` package if it is not already cached; the test fixtures
 themselves remain hermetic.
 

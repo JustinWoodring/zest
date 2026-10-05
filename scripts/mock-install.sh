@@ -121,7 +121,7 @@ cat >"$CALLER/build.zig.zon" <<'EOF'
     .name = .ziptail,
     .version = "0.1.0",
     .fingerprint = 0x5e2e85076f0d3ab7,
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0",
     .dependencies = .{
         .vaxis = .{ .path = "../missing-vaxis" },
     },
@@ -229,14 +229,14 @@ ok "builds producing a 'zest' binary are refused so they can never shadow zest"
 #    build step, after proving the bootstrap worked.
 # ---------------------------------------------------------------------------
 fakebin="$WORK/faketoolchains"
-mkdir -p "$fakebin/zig-x86_64-linux-0.16.0"
+mkdir -p "$fakebin/zig-x86_64-linux-0.17.0"
 # shellcheck disable=SC2016  # the fake zig script must contain literal "$1"
-printf '#!/bin/sh\nif [ "$1" = version ]; then echo 0.16.0; else echo "fake zig cannot build" >&2; exit 1; fi\n' \
-    >"$fakebin/zig-x86_64-linux-0.16.0/zig"
-chmod +x "$fakebin/zig-x86_64-linux-0.16.0/zig"
-tar -Jcf "$WORK/zig-x86_64-linux-0.16.0.tar.xz" -C "$fakebin" zig-x86_64-linux-0.16.0
-shasum=$(sha256sum "$WORK/zig-x86_64-linux-0.16.0.tar.xz" | cut -d' ' -f1)
-printf '{"0.16.0":{"x86_64-linux":{"tarball":"file://%s/zig-x86_64-linux-0.16.0.tar.xz","shasum":"%s","size":1}}}\n' \
+printf '#!/bin/sh\nif [ "$1" = version ]; then echo 0.17.0; else echo "fake zig cannot build" >&2; exit 1; fi\n' \
+    >"$fakebin/zig-x86_64-linux-0.17.0/zig"
+chmod +x "$fakebin/zig-x86_64-linux-0.17.0/zig"
+tar -Jcf "$WORK/zig-x86_64-linux-0.17.0.tar.xz" -C "$fakebin" zig-x86_64-linux-0.17.0
+shasum=$(sha256sum "$WORK/zig-x86_64-linux-0.17.0.tar.xz" | cut -d' ' -f1)
+printf '{"0.17.0":{"x86_64-linux":{"tarball":"file://%s/zig-x86_64-linux-0.17.0.tar.xz","shasum":"%s","size":1}}}\n' \
     "$WORK" "$shasum" >"$WORK/index.json"
 
 # A PATH with every tool install.sh needs but no zig, built from explicit
@@ -255,7 +255,7 @@ done
 ZIG_INDEX_URL="file://$WORK/index.json" \
     PATH="$safebin" ZEST_DATA="$WORK/bootstrap-data" ZEST_REPO_URL="file://$V1" \
     sh "$INSTALL" >"$OUT" 2>"$ERR" && fail "bootstrap run must fail at build" "unexpected success"
-assert_grep "bootstrap log" "bootstrapped zig 0.16.0" "$ERR"
+assert_grep "bootstrap log" "bootstrapped zig 0.17.0" "$ERR"
 assert_grep "bootstrap used private toolchain" "private to" "$ERR"
 assert_grep "fake zig build failure surfaced" "build failed" "$ERR"
 [ ! -x "$WORK/bootstrap-data/bin/zest" ] || fail "fake build installed" "bin/zest exists"

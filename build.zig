@@ -30,7 +30,7 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);
-    if (b.args) |args| run_cmd.addArgs(args);
+    run_cmd.addPassthruArgs();
     const run_step = b.step("run", "Run zest");
     run_step.dependOn(b.getInstallStep());
     run_step.dependOn(&run_cmd.step);

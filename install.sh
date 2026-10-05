@@ -21,7 +21,7 @@
 # Environment overrides:
 #   ZEST_REPO_URL   git URL to build zest from (default: canonical repo)
 #   ZEST_REF        branch/tag to build (default: default branch)
-#   ZIG_VERSION     minimum/bootstrapped zig version (default: 0.16.0)
+#   ZIG_VERSION     minimum/bootstrapped zig version (default: 0.17.0)
 #   ZIG_INDEX_URL   ziglang download index (default: official)
 #   ZEST_DATA       state root (default: $XDG_DATA_HOME/zest or
 #                   ~/.local/share/zest)
@@ -29,7 +29,7 @@ set -eu
 
 ZEST_REPO_URL="${ZEST_REPO_URL:-https://github.com/JustinWoodring/zest}"
 ZEST_REF="${ZEST_REF:-}"
-ZIG_VERSION="${ZIG_VERSION:-0.16.0}"
+ZIG_VERSION="${ZIG_VERSION:-0.17.0}"
 ZIG_INDEX_URL="${ZIG_INDEX_URL:-https://ziglang.org/download/index.json}"
 
 # XDG_DATA_HOME must be absolute. A relative project-local value should not

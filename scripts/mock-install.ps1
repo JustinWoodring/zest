@@ -145,15 +145,15 @@ Ok 'builds producing a zest binary are refused so they can never shadow zest'
 $origPath = $env:PATH
 # noop
 $fakeRoot = Join-Path $WORK 'faketoolchains'
-$fakeDir = Join-Path $fakeRoot 'zig-x86_64-windows-0.16.0'
+$fakeDir = Join-Path $fakeRoot 'zig-x86_64-windows-0.17.0'
 New-Item -ItemType Directory -Force -Path $fakeDir | Out-Null
 '@echo off
-if "%1"=="version" (echo 0.16.0) else (echo fake zig cannot build 1>&2 & exit /b 1)' |
+if "%1"=="version" (echo 0.17.0) else (echo fake zig cannot build 1>&2 & exit /b 1)' |
     Set-Content (Join-Path $fakeDir 'zig.cmd')
-Compress-Archive -Path $fakeDir -DestinationPath "$WORK\zig-x86_64-windows-0.16.0.zip"
-$shasum = (Get-FileHash -Algorithm SHA256 "$WORK\zig-x86_64-windows-0.16.0.zip").Hash.ToLower()
+Compress-Archive -Path $fakeDir -DestinationPath "$WORK\zig-x86_64-windows-0.17.0.zip"
+$shasum = (Get-FileHash -Algorithm SHA256 "$WORK\zig-x86_64-windows-0.17.0.zip").Hash.ToLower()
 $urlPath = ($WORK -replace '\\', '/')
-"{""0.16.0"":{""x86_64-windows"":{""tarball"":""file:///$urlPath/zig-x86_64-windows-0.16.0.zip"",""shasum"":""$shasum"",""size"":1}}}" |
+"{""0.17.0"":{""x86_64-windows"":{""tarball"":""file:///$urlPath/zig-x86_64-windows-0.17.0.zip"",""shasum"":""$shasum"",""size"":1}}}" |
     Set-Content "$WORK\index.json"
 
 # Drop only the directory that provides zig; everything else (git, tar,
@@ -172,7 +172,7 @@ $rc = $LASTEXITCODE
 $env:PATH = $origPath
 if ($rc -eq 0) { Fail 'bootstrap run must fail at build' 'unexpected success' }
 $t6 = Get-Content (Join-Path $WORK 't6.log') -Raw
-Assert-Grep 'bootstrap log' 'bootstrapped zig 0.16.0' $t6
+Assert-Grep 'bootstrap log' 'bootstrapped zig 0.17.0' $t6
 Assert-Grep 'bootstrap used private toolchain' 'private to' $t6
 Assert-Grep 'fake zig build failure surfaced' 'build failed' $t6
 if (Test-Path "$WORK\bootstrap-data\bin\zest.exe") { Fail 'fake build installed' 'zest.exe exists' }

@@ -116,7 +116,7 @@ pub fn findBootstrappedZig(
         candidates.deinit(gpa);
     }
 
-    // Directory names look like `zig-x86_64-linux-0.16.0`; newest version last.
+    // Directory names look like `zig-x86_64-linux-0.17.0`; newest version last.
     std.mem.sort([]const u8, candidates.items, {}, struct {
         fn lessThan(_: void, a: []const u8, b: []const u8) bool {
             return orderByName(a, b) == .lt;

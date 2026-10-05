@@ -596,8 +596,8 @@ fn exec(c: *Ctx, path: []const u8, args: []const []const u8) !u8 {
     return switch (term) {
         .exited => |code| code,
         .signal => |sig| blk: {
-            try c.err.print("zest: {s} terminated by signal {d}\n", .{ path, @intFromEnum(sig) });
-            break :blk 128 + @as(u8, @intCast(@intFromEnum(sig) & 0x7f));
+            try c.err.print("zest: {s} terminated by signal {d}\n", .{ path, @backingInt(sig) });
+            break :blk 128 + @as(u8, @intCast(@backingInt(sig) & 0x7f));
         },
         else => 1,
     };

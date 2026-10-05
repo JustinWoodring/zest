@@ -36,7 +36,7 @@ foreach ($a in $args) {
 
 if (-not $env:ZEST_REPO_URL)  { $env:ZEST_REPO_URL  = 'https://github.com/JustinWoodring/zest' }
 if (-not $env:ZEST_REF)       { $env:ZEST_REF       = '' }
-if (-not $env:ZIG_VERSION)    { $env:ZIG_VERSION    = '0.16.0' }
+if (-not $env:ZIG_VERSION)    { $env:ZIG_VERSION    = '0.17.0' }
 if (-not $env:ZIG_INDEX_URL)  { $env:ZIG_INDEX_URL  = 'https://ziglang.org/download/index.json' }
 if (-not $env:ZEST_DATA) {
     $dataHome = if ($env:XDG_DATA_HOME -and $env:XDG_DATA_HOME -match '^[A-Za-z]:[\\/]') {

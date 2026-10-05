@@ -189,28 +189,29 @@ cp -r "$F/imposter" "$F/zest"                    # tool NAMED zest (reserved)
 # CLI basics
 # ---------------------------------------------------------------------------
 out=$("$ZEST" --version)
-printf '%s' "$out" | grep -q "zest 0.1.1" || fail "--version" "$out"
+printf '%s' "$out" | grep -q "zest 0.2.0" || fail "--version" "$out"
 ok "--version"
 
 assert_exit 2 "usage error exits 2" "$ZEST" frobnicate
 ok "unknown command exits 2"
 
 # Missing zig must be reported cleanly (strip every PATH entry that has zig).
-zigdir=$(dirname "$(command -v zig)")
 restricted_path=$(printf '%s' "$PATH" | tr ':' '\n' |
-    grep -v -e "^$zigdir\$" -e '^/usr/local/bin$' | tr '\n' ':' | sed 's/:$//')
+    while IFS= read -r d; do
+        [ -x "$d/zig" ] || printf '%s\n' "$d"
+    done | tr '\n' ':' | sed 's/:$//')
 set +e
 PATH="$restricted_path" "$ZEST" install "$(fileurl "$F/tool-fixture")" >"$LOG" 2>&1
 rc=$?
 set -e
 {
-    echo "DIAG: rc=$rc restricted=[$restricted_path] zigdir=[$zigdir]"
+    echo "DIAG: rc=$rc restricted=[$restricted_path]"
 } >>"$LOG"
 if [ "$rc" = 1 ] && grep -q "no .zig. compiler" "$LOG"; then
     ok "missing zig reported cleanly"
 else
     fail "missing zig reported cleanly" \
-        "rc=$rc zigdir=$zigdir log=$(cat "$LOG")"
+        "rc=$rc log=$(cat "$LOG")"
 fi
 
 # ---------------------------------------------------------------------------
@@ -325,7 +326,7 @@ ok "inspect rejects a non-zest project"
 mkdir -p "$XDG_DATA_HOME/zest/bin"
 cp "$ZEST" "$XDG_DATA_HOME/zest/bin/zest$EXE"
 out=$("$XDG_DATA_HOME/zest/bin/zest$EXE" --version)
-printf '%s' "$out" | grep -q "zest 0.1.1" || fail "pre self-update setup" "$out"
+printf '%s' "$out" | grep -q "zest 0.2.0" || fail "pre self-update setup" "$out"
 ZEST_SELF_REPO="$(fileurl "$F/selfsrc")" "$XDG_DATA_HOME/zest/bin/zest$EXE" self-update >"$LOG" 2>&1 ||
     fail "self-update" "$(cat "$LOG")"
 assert_grep "self-update output" "zest self-updated" "$LOG"
@@ -341,7 +342,7 @@ done
 printf '%s' "$out" | grep -q "zest-fixture-self" ||
     fail "binary replaced by self-update" "$out"
 out=$("$ZEST" --version)
-printf '%s' "$out" | grep -q "zest 0.1.1" || fail "repo binary clobbered" "$out"
+printf '%s' "$out" | grep -q "zest 0.2.0" || fail "repo binary clobbered" "$out"
 ok "self-update atomically replaces zest; nothing else touched"
 
 # ---------------------------------------------------------------------------
