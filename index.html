@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>zest — Zig executable staging tool</title>
+<meta name="description" content="Install, run, inspect, and upgrade CLI tools built from any git repository. Compiled on your machine with the real Zig build pipeline.">
+<meta name="color-scheme" content="dark">
+<link rel="icon" type="image/svg+xml" href="logo.svg">
+<style>
+  :root {
+    --bg: #0a0c0f;
+    --panel: #0f1318;
+    --panel-2: #131922;
+    --line: #1d242e;
+    --line-2: #2a323e;
+    --text: #e9ecef;
+    --dim: #838d9c;
+    --faint: #5b6472;
+    --accent: #2dd4a7;   /* zest green */
+    --accent-2: #f7a41d; /* zig orange */
+    --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; scroll-padding-top: 72px; }
+  body { background: var(--bg); color: var(--text); font: 16px/1.6 var(--sans); -webkit-font-smoothing: antialiased; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 0 28px; }
+  .kicker { font: 600 11px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--accent); }
+  .kicker .num { color: var(--faint); margin-right: 10px; }
+
+  /* ---- chrome ---- */
+  header.site { position: sticky; top: 0; z-index: 20; background: rgba(10,12,15,.82); backdrop-filter: blur(10px) saturate(140%); border-bottom: 1px solid var(--line); }
+  header.site .wrap { display: flex; align-items: center; gap: 11px; height: 58px; }
+  header.site img { width: 26px; height: 26px; border-radius: 7px; }
+  header.site .word { font: 700 16px var(--mono); letter-spacing: .02em; }
+  header.site nav { margin-left: auto; display: flex; gap: 22px; }
+  header.site nav a { font: 500 13.5px var(--mono); color: var(--dim); }
+  header.site nav a:hover { color: var(--text); text-decoration: none; }
+
+  /* ---- hero ---- */
+  .hero { padding: 74px 0 10px; }
+  .hero .row { display: flex; align-items: flex-start; gap: 26px; }
+  .hero .mark { width: 92px; height: 92px; border-radius: 22px; flex: none; margin-top: 4px; }
+  .hero h1 { font-size: clamp(38px, 6vw, 58px); line-height: 1.02; letter-spacing: -.02em; font-weight: 700; }
+  .hero h1 .z { color: var(--accent); }
+  .hero .lede { margin-top: 14px; max-width: 620px; color: var(--dim); font-size: 18px; }
+  .hero .lede b { color: var(--text); font-weight: 600; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 26px; }
+  .chip { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 999px; font: 600 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
+  .chip.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--line-2)); }
+
+  /* ---- install ---- */
+  .installs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 30px; }
+  .inst { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px 18px; }
+  .inst .os { font: 600 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
+  .inst .cmd { display: block; margin: 12px 0 10px; background: #07090c; border: 1px solid var(--line); border-radius: 8px; padding: 12px 13px; font: 13px/1.5 var(--mono); color: #d6e3dd; white-space: pre; overflow-x: auto; }
+  .inst .note { font-size: 13px; color: var(--dim); }
+  .notes { margin-top: 16px; color: var(--faint); font-size: 13px; max-width: 640px; }
+  .notes code, .body code, td code { background: #131922; border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; font: 12.5px var(--mono); color: #d6e3dd; }
+  .notes a { color: var(--dim); text-decoration: underline; text-underline-offset: 3px; }
+
+  /* ---- sections ---- */
+  section { padding: 46px 0 6px; border-top: 1px solid var(--line); margin-top: 46px; }
+  section:first-of-type { border-top: 0; }
+  section h2 { font-size: 26px; letter-spacing: -.015em; font-weight: 650; margin: 10px 0 6px; }
+  section h3 { font: 600 12px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--faint); margin: 30px 0 12px; }
+  .lead { color: var(--dim); max-width: 660px; margin-bottom: 22px; }
+
+  pre.term { background: #07090c; border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; font: 13.5px/1.75 var(--mono); color: #d6e3dd; overflow-x: auto; }
+  pre.term .p { color: var(--accent-2); }
+  pre.term .c { color: var(--faint); }
+
+  /* ---- demo: big, legible terminal captures ---- */
+  .demo { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .demo figure { background: var(--panel); border: 1px solid var(--line-2); border-radius: 14px; overflow: hidden; }
+  .demo figure:first-child { grid-column: 1 / -1; } /* hero capture spans full width */
+  .demo img { display: block; width: 100%; height: auto; background: #07090c; border-bottom: 1px solid var(--line); }
+  .demo figcaption { display: flex; align-items: center; gap: 9px; padding: 11px 14px; font: 600 12.5px var(--mono); letter-spacing: .03em; color: var(--dim); }
+  .demo figcaption::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
+
+  /* ---- tables ---- */
+  table.checks { width: 100%; border-collapse: collapse; }
+  table.checks th, table.checks td { text-align: left; padding: 10px 12px 10px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.checks th { font: 600 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
+  table.checks td:first-child { white-space: nowrap; font: 13px var(--mono); color: var(--text); }
+  table.checks td:last-child { color: var(--dim); }
+
+  /* ---- spec list (why), no cards ---- */
+  .specs { display: grid; grid-template-columns: 1fr 1fr; gap: 0 40px; }
+  .specs .row { display: flex; gap: 18px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+  .specs .row .k { flex: none; width: 148px; font: 600 12.5px var(--mono); letter-spacing: .04em; color: var(--accent); }
+  .specs .row .d { color: var(--dim); font-size: 14.5px; }
+
+  .sponsor-line { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 34px; color: var(--dim); font-size: 13.5px; }
+  .sponsor-cta { display: inline-flex; align-items: center; min-height: 36px; padding: 0 13px; border: 1px solid color-mix(in srgb, var(--accent-2) 55%, var(--line-2)); border-radius: 8px; background: color-mix(in srgb, var(--accent-2) 13%, var(--panel)); color: var(--accent-2); font: 600 12px var(--mono); text-decoration: none; }
+  .sponsor-cta:hover { border-color: var(--accent-2); background: color-mix(in srgb, var(--accent-2) 22%, var(--panel)); color: var(--text); text-decoration: none; }
+
+  footer { border-top: 1px solid var(--line); margin-top: 60px; padding: 26px 0 44px; color: var(--faint); font: 13px var(--mono); }
+  footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  footer a { color: var(--dim); }
+
+  @media (max-width: 760px) {
+    .installs, .demo, .specs { grid-template-columns: 1fr; }
+    .hero .row { flex-direction: column; gap: 18px; }
+    .hero .mark { width: 72px; height: 72px; }
+    header.site nav { gap: 14px; }
+    header.site nav a { font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="wrap">
+    <img src="logo.svg" alt="zest logo">
+    <span class="word">zest</span>
+    <nav>
+      <a href="#install">Install</a>
+      <a href="#demo">Demo</a>
+      <a href="#inspect">Inspect</a>
+      <a href="#skills">Skills</a>
+      <a href="https://github.com/JustinWoodring/zest">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="hero">
+    <div class="row">
+      <img class="mark" src="logo.svg" alt="zest logo">
+      <div>
+        <h1><span class="z">z</span>est</h1>
+        <p class="lede">A <b>staging tool for Zig executables</b>. Point it at any git repo, a
+        host shorthand, or a Zigistry name. It clones, builds in ReleaseSafe on your
+        machine, and links the binary &mdash; no prebuilt artifacts to trust.</p>
+        <div class="chips">
+          <span class="chip on">Zig 0.16</span>
+          <span class="chip">MIT</span>
+          <span class="chip">Linux &middot; macOS &middot; Windows</span>
+          <a class="chip" href="https://github.com/JustinWoodring/zest/actions/workflows/ci.yml"><img src="https://github.com/JustinWoodring/zest/actions/workflows/ci.yml/badge.svg" alt="ci" style="height:20px"></a>
+          <a class="chip" href="https://github.com/JustinWoodring/zest/releases"><img src="https://img.shields.io/github/v/release/JustinWoodring/zest" alt="release" style="height:20px"></a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="lead">I’m building a small ecosystem of focused Zig tools: zest builds and updates
+  CLI tools; zymposium provisions the agent skills those tools and Zig packages provide.
+  Each works on its own; the integration is optional.</p>
+  <section id="install">
+    <div class="kicker"><span class="num">01</span>Install</div>
+    <h2>One command, no root required</h2>
+    <div class="installs">
+      <div class="inst">
+        <div class="os">Linux &amp; macOS</div>
+        <code class="cmd">curl -fsSL https://justinwoodring.github.io/zest/install.sh | sh</code>
+        <div class="note">Bootstraps a checksum-verified private Zig toolchain if you don't have one.</div>
+      </div>
+      <div class="inst">
+        <div class="os">Windows</div>
+        <code class="cmd">irm https://justinwoodring.github.io/zest/install.ps1 | iex</code>
+        <div class="note">PowerShell 5.1+. Same protection and upgrade model.</div>
+      </div>
+    </div>
+    <p class="notes">Already installed? The script hands over to <code>zest self-update</code>. The bin
+    directory holds <em>zest</em> and every tool it installs, so the installer offers to add it to
+    your <code>PATH</code> and your tools run by bare name. For automation: <code>sh -s -- --yes</code> /
+    <code>--no</code> (PowerShell: <code>-Yes</code> / <code>-NoPath</code>). Pre-built binaries live in
+    <a href="https://github.com/JustinWoodring/zest/releases">Releases</a>.</p>
+  </section>
+
+  <section id="usage">
+    <div class="kicker"><span class="num">02</span>Use</div>
+    <h2>Install, run, upgrade</h2>
+    <p class="lead">A git URL, a host shorthand, or a short name from the
+    <a href="https://zigistry.dev">Zigistry</a> registry. Tags, branches, and commit hashes all work.</p>
+<pre class="term"><span class="p">$</span> zest install github.com/user/my-cli-tool
+<span class="p">$</span> zest run my-cli-tool --help
+<span class="p">$</span> zest update my-cli-tool
+<span class="c"># or try anything without installing it first:</span>
+<span class="p">$</span> zest run github.com/user/my-cli-tool --version</pre>
+  </section>
+
+  <section id="demo">
+    <div class="kicker"><span class="num">03</span>Demo</div>
+    <h2>Real terminal captures</h2>
+    <p class="lead">Every recording below is actual output from the built binary against a local git fixture.</p>
+    <div class="demo">
+      <figure>
+        <img src="gifs/install.gif" alt="zest install, list, and run a tool">
+        <figcaption>install &rarr; list &rarr; run</figcaption>
+      </figure>
+      <figure>
+        <img src="gifs/inspect.gif" alt="zest inspect a project">
+        <figcaption>inspect before you install</figcaption>
+      </figure>
+      <figure>
+        <img src="gifs/update.gif" alt="zest update to the latest tag">
+        <figcaption>update to the latest tag</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="inspect">
+    <div class="kicker"><span class="num">04</span>Inspect</div>
+    <h2>Know before you install</h2>
+    <p class="lead"><code>zest inspect</code> reads a project and reports whether zest can
+    install it, whether the declared version trails the latest upstream tag, and how the
+    package appears in the registry. It never builds and never writes state.</p>
+<pre class="term"><span class="p">$</span> zest inspect .
+zest inspect  my-cli-tool
+location      .
+version       1.4.2   (upstream v1.5.0, OUT OF DATE: `zest update my-cli-tool`)
+minimum zig   0.16.0
+description   A command-line tool for doing things.
+license       MIT
+author        Ada Lovelace &lt;ada@example.com&gt;
+remote        https://github.com/user/my-cli-tool
+zigistry      indexed  https://github.com/user/my-cli-tool  (43 stars)  (same repo as remote)
+programs      my-cli-tool
+verdict       installable  (zest installs "my-cli-tool")</pre>
+    <h3>What it reads</h3>
+    <table class="checks">
+      <tr><th>Source</th><th>What zest inspects</th></tr>
+      <tr><td>build.zig</td><td>Every <code>addExecutable</code> target and its <code>.name</code> (computed names are marked dynamic).</td></tr>
+      <tr><td>build.zig.zon</td><td>Declared name, version, and minimum zig version.</td></tr>
+      <tr><td>README.md</td><td>First prose paragraph, as the description.</td></tr>
+      <tr><td>LICENSE</td><td>Sniffed for MIT, Apache-2.0, GPL, BSD, ISC, MPL, or Unlicense.</td></tr>
+      <tr><td>git</td><td>Last commit author and the <code>origin</code> remote.</td></tr>
+      <tr><td>upstream</td><td>Latest tag via <code>git ls-remote --tags</code>, compared to the declared version.</td></tr>
+      <tr><td>Zigistry</td><td>Registry visibility, matching repo, stars, and collision candidates.</td></tr>
+    </table>
+    <h3>Verdicts</h3>
+    <p class="lead">The verdict mirrors what <code>zest install</code> will do:
+    <b>installable</b> (one program, or one named after the tool), <b>ambiguous</b> (several
+    programs, none matching, so zest refuses to guess), <b>no_binaries</b>, or
+    <b>not_zest_project</b>. The exit code is 0 only for <code>installable</code>.</p>
+  </section>
+
+  <section id="why">
+    <div class="kicker"><span class="num">05</span>Why</div>
+    <h2>Built like a release engineer would want it</h2>
+    <div class="specs">
+      <div class="row"><div class="k">Tagged first</div><div class="d">zest tracks the latest semantic-version tag, never master, and only falls back to the default branch when a repo has no tags.</div></div>
+      <div class="row"><div class="k">Any source</div><div class="d">Git URLs, host shorthand, or short names resolved through Zigistry. Tags, branches, or commit hashes.</div></div>
+      <div class="row"><div class="k">Self-protecting</div><div class="d">The name <em>zest</em> is reserved. No package can overwrite, shadow, or remove the zest binary; only <code>zest self-update</code> can.</div></div>
+      <div class="row"><div class="k">No TOFU</div><div class="d">No trust-on-first-use binaries. Everything compiles locally with the real Zig build pipeline in ReleaseSafe.</div></div>
+      <div class="row"><div class="k">Cross-platform</div><div class="d">Linux (x86_64, arm64), macOS (arm64), and Windows (x86_64, arm64). Every tag ships binaries for all five.</div></div>
+      <div class="row"><div class="k">Atomic</div><div class="d">Manifest writes, installs, and self-upgrades are atomic, so a failed build never damages an existing install.</div></div>
+    </div>
+  </section>
+
+  <section id="upgrade">
+    <div class="kicker"><span class="num">06</span>Upgrade</div>
+    <h2>Everything, including zest</h2>
+    <p class="lead">Every tool updates with one command, and zest upgrades itself the same
+    way, from tagged releases, without letting another package touch it.</p>
+<pre class="term"><span class="p">$</span> zest update my-cli-tool
+<span class="p">$</span> zest self-update
+<span class="p">$</span> zest list
+<span class="c"># NAME          VERSION  SOURCE</span>
+<span class="c"># my-cli-tool    v1.4.2   https://github.com/user/my-cli-tool</span></pre>
+    <p class="sponsor-line"><span>Enjoying zest?</span>
+      <a class="sponsor-cta" href="https://github.com/sponsors/JustinWoodring">Consider sponsoring</a>
+      <span>its development.</span></p>
+  </section>
+
+  <section id="skills">
+    <div class="kicker"><span class="num">07</span>Agent skills</div>
+    <h2>Supercharge your tools with skills</h2>
+    <p class="lead">A tool can ship a <code>skills/</code> directory: the workflows, references, and
+    hard-won gotchas an agent needs to drive it properly. <a
+    href="https://github.com/JustinWoodring/zymposium">zymposium</a> links those skills into the
+    agent directories your editor actually reads, and &mdash; because the link points into the
+    clone zest already manages &mdash; one <code>zest update</code> refreshes the binary and the
+    skills together.</p>
+<pre class="term"><span class="p">$</span> zest install JustinWoodring/zymposium
+installed zymposium (v0.1.0) → ~/.local/share/zest/bin/zymposium
+<span class="p">$</span> zest update my-cli-tool
+updated my-cli-tool: v1.4.1 → v1.4.2 (9f2c1ab3d0e4)
+zest: agent skills for my-cli-tool synced via zymposium
+<span class="c"># the binary and its agent skills, from one command</span></pre>
+    <p class="notes">Optional, non-blocking, and honest about it: with no zymposium installed zest
+    says nothing at all, and a zymposium that is missing, unbuildable, or unhappy about a skill
+    name is reported and never fails a zest command. <code>zest inspect</code> tells you whether a
+    tool ships <code>skills/</code> and what zymposium has already provisioned.</p>
+  </section>
+
+</div>
+
+<footer>
+  <div class="wrap">
+    <span>zest &middot; MIT &middot; &copy; 2026 Justin Woodring</span>
+    <span><a href="https://github.com/JustinWoodring/zest">GitHub</a> &middot;
+          <a href="https://github.com/JustinWoodring/zest/releases">Releases</a> &middot;
+          <a href="CONTRIBUTING.md">Contributing</a> &middot;
+          <a href="CONTRIBUTORS">Contributors</a> &middot;
+          <a href="https://github.com/JustinWoodring/zymposium">zymposium</a> &middot;
+          <a href="https://zigistry.dev">Zigistry</a></span>
+  </div>
+</footer>
+
+</body>
+</html>
